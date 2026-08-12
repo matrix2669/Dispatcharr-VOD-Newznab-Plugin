@@ -1,12 +1,26 @@
+import logging
 import re
 import threading
 import time
+import uuid
+from urllib.parse import urlencode
+
+from django.utils import timezone
 
 from core.xtream_codes import Client as XtreamCodesClient
 from apps.m3u.models import M3UAccount
-from apps.vod.models import M3UVODCategoryRelation
+from apps.vod.models import (
+    Episode,
+    M3UEpisodeRelation,
+    M3UMovieRelation,
+    M3USeriesRelation,
+    M3UVODCategoryRelation,
+    Movie,
+    Series,
+)
 
 
+logger = logging.getLogger(__name__)
 _cache = {}
 _cache_lock = threading.RLock()
 
@@ -232,7 +246,167 @@ def series_episode_variants(candidate, season, episode=None):
         return rows
 
 
+def _movie_relation_for_proxy(account, payload, extension):
+    stream_id = str(payload["media_id"])
+    relation = (
+        M3UMovieRelation.objects
+        .filter(m3u_account=account, stream_id=stream_id)
+        .select_related("movie")
+        .first()
+    )
+    if relation:
+        if extension and relation.container_extension != extension:
+            relation.container_extension = extension
+            relation.last_seen = timezone.now()
+            relation.save(update_fields=["container_extension", "last_seen", "updated_at"])
+        return relation
+
+    tmdb_id = _tmdb(payload.get("tmdb_id"))
+    movie = Movie.objects.filter(tmdb_id=tmdb_id).first() if tmdb_id else None
+    if movie is None:
+        title = str(payload.get("content_name") or "").strip()
+        year = payload.get("year")
+        query = Movie.objects.all()
+        if title:
+            query = query.filter(name__iexact=title)
+        if year:
+            query = query.filter(year=int(year))
+        movie = query.first() if title else None
+    if movie is None:
+        raise ValueError(
+            f"Dispatcharr movie object not found for TMDB {tmdb_id or 'unknown'}; "
+            f"cannot proxy raw stream {stream_id}"
+        )
+
+    relation = M3UMovieRelation.objects.create(
+        m3u_account=account,
+        movie=movie,
+        stream_id=stream_id,
+        container_extension=extension or "mp4",
+        custom_properties={"mustarrd_vod_newznab": {"materialized": True}},
+        last_seen=timezone.now(),
+    )
+    logger.info(
+        "Materialized missing Dispatcharr movie relation account=%s stream_id=%s movie=%s",
+        account.id,
+        stream_id,
+        movie.id,
+    )
+    return relation
+
+
+def _episode_relation_for_proxy(account, payload, extension):
+    stream_id = str(payload["media_id"])
+    relation = (
+        M3UEpisodeRelation.objects
+        .filter(m3u_account=account, stream_id=stream_id)
+        .select_related("episode", "episode__series")
+        .first()
+    )
+    if relation:
+        if extension and relation.container_extension != extension:
+            relation.container_extension = extension
+            relation.last_seen = timezone.now()
+            relation.save(update_fields=["container_extension", "last_seen", "updated_at"])
+        return relation
+
+    tmdb_id = _tmdb(payload.get("tmdb_id"))
+    series = Series.objects.filter(tmdb_id=tmdb_id).first() if tmdb_id else None
+    if series is None:
+        raise ValueError(
+            f"Dispatcharr series object not found for TMDB {tmdb_id or 'unknown'}; "
+            f"cannot proxy raw episode stream {stream_id}"
+        )
+
+    season = int(payload.get("season") or 0)
+    episode_number = int(payload.get("episode") or 0)
+    episode = Episode.objects.filter(
+        series=series,
+        season_number=season,
+        episode_number=episode_number,
+    ).first()
+    if episode is None:
+        raise ValueError(
+            f"Dispatcharr episode not found for TMDB {tmdb_id} S{season:02d}E{episode_number:02d}; "
+            f"cannot proxy raw stream {stream_id}"
+        )
+
+    series_relation = None
+    external_series_id = str(payload.get("series_id") or "").strip()
+    if external_series_id:
+        series_relation = M3USeriesRelation.objects.filter(
+            m3u_account=account,
+            external_series_id=external_series_id,
+        ).first()
+    if series_relation is None:
+        series_relation = M3USeriesRelation.objects.filter(
+            m3u_account=account,
+            series=series,
+        ).order_by("-updated_at").first()
+
+    relation = M3UEpisodeRelation.objects.create(
+        m3u_account=account,
+        episode=episode,
+        series_relation=series_relation,
+        stream_id=stream_id,
+        container_extension=extension or "mp4",
+        custom_properties={"mustarrd_vod_newznab": {"materialized": True}},
+        last_seen=timezone.now(),
+    )
+    logger.info(
+        "Materialized missing Dispatcharr episode relation account=%s stream_id=%s episode=%s",
+        account.id,
+        stream_id,
+        episode.id,
+    )
+    return relation
+
+
+def dispatcharr_proxy_source(payload, settings):
+    """Return a native Dispatcharr VOD proxy URL for the exact raw provider variant.
+
+    Supplying a session ID in the path intentionally bypasses Dispatcharr's
+    first-request Redirect behavior. The request therefore enters the native
+    VOD proxy/connection manager even when the global default stream profile is
+    Redirect, which keeps Mustarrd downloads visible in Dispatcharr VOD stats.
+    """
+    base_url = str(settings.get("dispatcharr_url") or "").strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("Dispatcharr URL seen by Mustarrd must be an absolute HTTP(S) URL")
+
+    kind = str(payload.get("kind") or "").lower()
+    account = get_account(payload["dispatcharr_account_id"])
+    extension = str(payload.get("container_extension") or "mp4").lstrip(".")
+
+    if kind == "movie":
+        relation = _movie_relation_for_proxy(account, payload, extension)
+        content_type = "movie"
+        content_uuid = relation.movie.uuid
+    elif kind == "episode":
+        relation = _episode_relation_for_proxy(account, payload, extension)
+        content_type = "episode"
+        content_uuid = relation.episode.uuid
+    else:
+        raise ValueError(f"Unsupported VOD kind for Dispatcharr proxy: {kind}")
+
+    session_id = f"mustarrd_{uuid.uuid4().hex}"
+    query = urlencode({
+        "m3u_account_id": int(account.id),
+        "stream_id": str(payload["media_id"]),
+    })
+    url = f"{base_url}/proxy/vod/{content_type}/{content_uuid}/{session_id}?{query}"
+    logger.info(
+        "Resolved Mustarrd source through Dispatcharr VOD proxy kind=%s account=%s stream_id=%s session=%s",
+        kind,
+        account.id,
+        payload["media_id"],
+        session_id,
+    )
+    return url
+
+
 def resolve_source(kind, account_id, media_id, extension):
+    """Legacy direct-provider resolver retained for compatibility/debugging."""
     account = get_account(account_id)
     with XtreamCodesClient(
         account.server_url, account.username, account.password, account.get_user_agent_string()
