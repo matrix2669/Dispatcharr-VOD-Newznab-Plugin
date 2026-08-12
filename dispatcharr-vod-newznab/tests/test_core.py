@@ -6,7 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from servarr_bridge.config import DEFAULTS, sab_category_dir, sab_output_path
+from servarr_bridge.config import (
+    DEFAULTS,
+    infer_sab_state_from_output_path,
+    sab_category_dir,
+    sab_output_path,
+)
 from servarr_bridge.descriptors import decode_descriptor, descriptor_nzb, encode_descriptor, extract_descriptor_from_nzb
 from servarr_bridge.probe import classify_dynamic_range
 from servarr_bridge.releases import build_movie_release
@@ -31,6 +36,26 @@ class ConfigTests(unittest.TestCase):
 
     def test_sab_category_is_sanitized(self):
         self.assertEqual(sab_category_dir("../radarr"), "mustarrd/_radarr")
+
+    def test_sab_state_recovers_from_mustarrd_output_path(self):
+        release = "Zootopia.2.2025.1080p.WEB-DL.SDR.H264.AAC5.1-MUSTARRD"
+        state = infer_sab_state_from_output_path(
+            f"/app/completed/mustarrd/radarr/{release}/{release}.mkv"
+        )
+        self.assertEqual(state["category"], "radarr")
+        self.assertEqual(state["title"], release)
+        self.assertEqual(
+            state["relative_output_path"],
+            f"mustarrd/radarr/{release}/{release}.mkv",
+        )
+
+    def test_non_servarr_output_is_not_inferred(self):
+        self.assertEqual(
+            infer_sab_state_from_output_path(
+                "/app/completed/TV Shows/First Things First/Season 00/show.mkv"
+            ),
+            {},
+        )
 
 
 class DescriptorTests(unittest.TestCase):
