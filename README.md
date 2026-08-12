@@ -13,7 +13,7 @@ Sonarr / Radarr
                     ├─ raw enabled Xtream accounts
                     ├─ TMDB matching + ffprobe
                     ├─ DV/HDR10+/HDR10/HDR/SDR naming
-                    ├─ output templates
+                    ├─ SAB category/job folder layout
                     └─ SAB queue/history translation
                                 │
                                 ▼
@@ -65,27 +65,34 @@ Important settings:
 - **Mustarrd URL / Username / Password**: credentials for a local Mustarrd user.
 - **Mustarrd Account ID**: existing Mustarrd account used for job ownership/concurrency.
 - **Completed Directory Seen by Sonarr/Radarr**: e.g. `/completed`.
-- **Movie Output Template** and **TV Output Template**: resolved by this plugin and sent to Mustarrd as a safe relative output path.
+- **Sonarr SAB Category** and **Radarr SAB Category**: default to `sonarr` and `radarr`.
 - **ffprobe Path**: defaults to `/usr/bin/ffprobe`.
 - **Respect Enabled Dispatcharr VOD Groups**: limits raw provider results to VOD categories enabled for each account in Dispatcharr.
 
-Default movie template:
+## SAB-compatible completed layout
+
+The final relative output path is determined at SAB `addfile` time because that is when Servarr supplies the actual category. The plugin mirrors normal SAB category + job-folder behavior:
 
 ```text
-mustarrd/Movies/{title} ({year}) {tmdb_tag}/{release}.{ext}
+mustarrd/<SAB category>/<release>/<release>.<ext>
 ```
 
-Default TV template:
+For example, with Radarr category `radarr`:
 
 ```text
-mustarrd/TV Shows/{series} ({year}) {tmdb_tag}/Season {season:02d}/{release}.{ext}
+mustarrd/radarr/Zootopia.2.2025.2160p.WEB-DL.DV.HEVC.DDP5.1-MUSTARRD/
+└── Zootopia.2.2025.2160p.WEB-DL.DV.HEVC.DDP5.1-MUSTARRD.mkv
 ```
 
-If a provider title already ends in the same `(year)`, the template renderer strips that copy before adding the configured year token.
+With **Completed Directory Seen by Sonarr/Radarr** set to `/completed`, the emulated SAB API reports:
 
-Available movie tokens: `{title}`, `{year}`, `{tmdb_id}`, `{tmdb_tag}`, `{release}`, `{ext}`.
+```text
+complete_dir: /completed
+category dir: mustarrd/radarr
+job storage: /completed/mustarrd/radarr/<release>
+```
 
-TV also supports: `{series}`, `{season}`, `{episode}`.
+The plugin always rebuilds this path when `mode=addfile` is received, so an older cached NZB cannot restore the pre-0.1.5 Movies/TV Shows directory layout.
 
 ## Service logging and diagnostics
 
@@ -178,7 +185,7 @@ Dolby Vision detection precedes HDR10 because DV streams may expose PQ/BT.2020 f
 
 Newznab results contain a small signed synthetic NZB. It contains no provider username/password or provider source URL.
 
-On `addfile`, the plugin verifies the descriptor and resolves the exact account/stream again. If Dispatcharr's importer did not retain that raw variant, the plugin creates the missing `M3UMovieRelation` or `M3UEpisodeRelation` for that real provider stream. The source passed to Mustarrd is then a Dispatcharr-native proxy URL of the form:
+On `addfile`, the plugin verifies the descriptor, reads the SAB category supplied by Servarr, constructs the SAB-compatible output path, and resolves the exact account/stream again. If Dispatcharr's importer did not retain that raw variant, the plugin creates the missing `M3UMovieRelation` or `M3UEpisodeRelation` for that real provider stream. The source passed to Mustarrd is then a Dispatcharr-native proxy URL of the form:
 
 ```text
 http://DISPATCHARR:9191/proxy/vod/movie/<uuid>/mustarrd_<session>?m3u_account_id=<id>&stream_id=<provider-stream-id>
