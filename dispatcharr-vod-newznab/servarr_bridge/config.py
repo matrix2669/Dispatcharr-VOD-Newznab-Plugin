@@ -32,6 +32,11 @@ def get_settings():
     cfg = PluginConfig.objects.get(key=PLUGIN_KEY)
     values = dict(DEFAULTS)
     values.update(cfg.settings or {})
+    # v0.1.0 used the PATH-dependent literal "ffprobe" as its default. Treat
+    # that exact legacy value (and blank values) as the old default so existing
+    # installations automatically use Dispatcharr's system ffprobe location.
+    if str(values.get("ffprobe_path") or "").strip() in {"", "ffprobe"}:
+        values["ffprobe_path"] = DEFAULTS["ffprobe_path"]
     return values
 
 
