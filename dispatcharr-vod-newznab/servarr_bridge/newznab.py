@@ -3,7 +3,6 @@ import time
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
-from .config import movie_output_path, tv_output_path
 from .descriptors import descriptor_nzb, encode_descriptor
 from .probe import probe_media, resolution_label
 from .provider import movie_candidates, movie_detail_and_url, series_candidates, series_episode_variants
@@ -63,14 +62,6 @@ def _movie_result(candidate, settings):
     video = probed["video"]
     audio = probed.get("audio") or {}
     release = build_movie_release(detail["name"], detail["year"], video, audio)
-    relpath = movie_output_path(
-        settings,
-        title=detail["name"],
-        year=detail["year"],
-        tmdb_id=detail["tmdb_id"],
-        release=release,
-        extension=detail["extension"],
-    )
     payload = {
         "version": 1,
         "kind": "movie",
@@ -81,7 +72,6 @@ def _movie_result(candidate, settings):
         "content_name": detail["name"],
         "year": detail["year"],
         "release": release,
-        "relative_output_path": relpath,
         "duration_minutes": int((probed.get("duration") or 0) / 60),
     }
     token = encode_descriptor(payload, settings["api_key"])
@@ -140,16 +130,6 @@ def search_tv(tmdbid, query, season, episode, settings):
             release = build_episode_release(
                 variant["series_name"], variant["year"], variant["season"], variant["episode"], video, audio
             )
-            relpath = tv_output_path(
-                settings,
-                series=variant["series_name"],
-                year=variant["year"],
-                tmdb_id=variant["tmdb_id"],
-                season=variant["season"],
-                episode=variant["episode"],
-                release=release,
-                extension=variant["extension"],
-            )
             payload = {
                 "version": 1,
                 "kind": "episode",
@@ -163,7 +143,6 @@ def search_tv(tmdbid, query, season, episode, settings):
                 "season": variant["season"],
                 "episode": variant["episode"],
                 "release": release,
-                "relative_output_path": relpath,
                 "duration_minutes": int(duration_seconds / 60),
             }
             token = encode_descriptor(payload, settings["api_key"])
