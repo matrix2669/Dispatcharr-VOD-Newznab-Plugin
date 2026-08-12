@@ -191,9 +191,20 @@ def history(settings, category=None, start=0, limit=100):
 
 
 def delete_job(settings, job_id, history=False):
-    shared_client(settings).delete(job_id)
-    if history:
-        STATE.delete(job_id)
+    """Remove a SAB job completely from Mustarrd.
+
+    Mustarrd's DELETE endpoint intentionally has two phases for active jobs:
+    the first call cancels the job and leaves a cancelled history row; a second
+    call deletes that now-finished row. SAB queue deletion is a removal, so
+    perform both phases when necessary and then discard our local mapping.
+    """
+    job_id = str(job_id)
+    client = shared_client(settings)
+    result = client.delete(job_id) or {}
+    if str(result.get("status") or "").lower() == "cancelled":
+        result = client.delete(job_id) or result
+    STATE.delete(job_id)
+    logger.info("Removed SAB job %s from Mustarrd (history=%s)", job_id, history)
     return {"status": True}
 
 
