@@ -1,4 +1,5 @@
 import fcntl
+import json
 import logging
 import os
 import secrets
@@ -18,6 +19,7 @@ PID_FILE = ROOT / ".servarr_service.pid"
 LOCK_FILE = ROOT / ".servarr_service.lock"
 LOG_FILE = ROOT / "servarr_service.log"
 BOOTSTRAP_LOG_FILE = ROOT / "servarr_service_bootstrap.log"
+SERVICE_SCRIPT = (ROOT / "service.py").resolve()
 
 
 class _PluginLogAdapter(logging.LoggerAdapter):
@@ -32,7 +34,7 @@ log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.6"
+    version = "0.1.7"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
@@ -40,15 +42,12 @@ class Plugin:
     actions = []
 
     def __init__(self):
-        # The detached HTTP service initializes Django so it can use Dispatcharr's
-        # ORM/models. If Dispatcharr's plugin autodiscovery is ever reached in that
-        # child, never recursively start another copy of this service.
         if os.environ.get("DISPATCHARR_VOD_NEWZNAB_SERVICE", "").lower() in {"1", "true", "yes"}:
             return
         try:
             self._ensure_api_key()
             pid = self._ensure_service()
-            log.info("Embedded Newznab/SAB service available (pid=%s)", pid)
+            log.info("Embedded Newznab/SAB service available (pid=%s, version=%s)", pid, self.version)
         except Exception:
             log.exception("Unable to start embedded Newznab/SAB service")
 
@@ -82,6 +81,44 @@ class Plugin:
             return None
 
     @staticmethod
+    def _cmdline(pid):
+        try:
+            raw = Path(f"/proc/{int(pid)}/cmdline").read_bytes()
+            return [part.decode("utf-8", errors="replace") for part in raw.split(b"\x00") if part]
+        except Exception:
+            return []
+
+    @classmethod
+    def _process_is_ours(cls, pid):
+        if not cls._pid_alive(pid):
+            return False
+        for arg in cls._cmdline(pid):
+            try:
+                if Path(arg).resolve() == SERVICE_SCRIPT:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    @classmethod
+    def _find_service_pids(cls):
+        pids = []
+        try:
+            proc_entries = Path("/proc").iterdir()
+        except Exception:
+            return pids
+        for entry in proc_entries:
+            if not entry.name.isdigit():
+                continue
+            try:
+                pid = int(entry.name)
+            except ValueError:
+                continue
+            if cls._process_is_ours(pid):
+                pids.append(pid)
+        return sorted(set(pids))
+
+    @staticmethod
     def _child_pythonpath():
         """Preserve Dispatcharr's import path in the standalone service child."""
         entries = []
@@ -96,14 +133,7 @@ class Plugin:
 
     @staticmethod
     def _python_executable():
-        """Return a real Python interpreter, never uWSGI's sys.executable.
-
-        Dispatcharr runs the web app under uWSGI, where ``sys.executable`` may
-        point at the uWSGI binary. Passing that to Popen makes uWSGI interpret
-        service.py as a uWSGI configuration file instead of executing Python.
-        Prefer Dispatcharr's configured virtualenv interpreter so Django and all
-        installed dependencies are identical to the parent process.
-        """
+        """Return a real Python interpreter, never uWSGI's sys.executable."""
         candidates = [
             os.environ.get("DISPATCHARR_PYTHON"),
             "/dispatcharrpy/bin/python",
@@ -156,29 +186,111 @@ class Plugin:
         return host, port, probe_host
 
     @staticmethod
-    def _health_ok(host, port, timeout=0.5):
+    def _service_health(host, port, timeout=0.5):
         try:
             with urlopen(f"http://{host}:{port}/health", timeout=timeout) as response:
-                return response.status == 200
+                if response.status != 200:
+                    return None
+                payload = json.loads(response.read().decode("utf-8"))
+                if not isinstance(payload, dict) or payload.get("status") != "ok":
+                    return None
+                return payload
         except Exception:
+            return None
+
+    @classmethod
+    def _terminate_pid(cls, pid):
+        if not cls._process_is_ours(pid):
+            log.warning("Refusing to terminate pid=%s because it is not this plugin's service.py", pid)
             return False
+
+        log.info("Stopping embedded service pid=%s", pid)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return True
+
+        deadline = time.monotonic() + 5.0
+        while cls._pid_alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+
+        if cls._pid_alive(pid):
+            log.warning("Embedded service pid=%s did not stop cleanly; sending SIGKILL", pid)
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            deadline = time.monotonic() + 2.0
+            while cls._pid_alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.05)
+        return not cls._pid_alive(pid)
+
+    def _stop_known_service_processes(self, health=None):
+        candidates = set(self._find_service_pids())
+        pid_file_value = self._read_pid()
+        if pid_file_value and self._process_is_ours(pid_file_value):
+            candidates.add(pid_file_value)
+        try:
+            health_pid = int((health or {}).get("pid"))
+        except (TypeError, ValueError):
+            health_pid = None
+        if health_pid and self._process_is_ours(health_pid):
+            candidates.add(health_pid)
+
+        for pid in sorted(candidates):
+            self._terminate_pid(pid)
+        PID_FILE.unlink(missing_ok=True)
+        return bool(candidates)
 
     def _ensure_service(self):
         LOCK_FILE.touch(exist_ok=True)
         with LOCK_FILE.open("r+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            pid = self._read_pid()
-            if pid and self._pid_alive(pid):
-                _, port, probe_host = self._service_settings()
-                if self._health_ok(probe_host, port):
-                    return pid
-                log.warning("PID file references live pid=%s but service health check failed; restarting", pid)
-                PID_FILE.unlink(missing_ok=True)
+            _, port, probe_host = self._service_settings()
+            health = self._service_health(probe_host, port)
+            running_version = str((health or {}).get("version") or "")
+
+            if health and running_version == self.version:
+                try:
+                    health_pid = int(health.get("pid"))
+                except (TypeError, ValueError):
+                    health_pid = None
+                if health_pid and self._process_is_ours(health_pid):
+                    PID_FILE.write_text(str(health_pid))
+                    return health_pid
+                own_pids = self._find_service_pids()
+                if len(own_pids) == 1:
+                    PID_FILE.write_text(str(own_pids[0]))
+                    return own_pids[0]
+                raise RuntimeError(
+                    "Embedded service reports the current version but its process cannot be identified safely"
+                )
+
+            if health:
+                log.info(
+                    "Embedded service version mismatch: running=%s installed=%s; restarting",
+                    running_version or "legacy/unknown",
+                    self.version,
+                )
+                if not self._stop_known_service_processes(health):
+                    raise RuntimeError(
+                        "A service is listening on the configured port but its process cannot be identified safely"
+                    )
+            else:
+                pid_file_value = self._read_pid()
+                own_pids = self._find_service_pids()
+                if pid_file_value and self._pid_alive(pid_file_value) and not self._process_is_ours(pid_file_value):
+                    log.warning("Ignoring stale PID file referencing unrelated pid=%s", pid_file_value)
+                    PID_FILE.unlink(missing_ok=True)
+                if own_pids:
+                    log.warning("Found unhealthy embedded service process(es) %s; restarting", own_pids)
+                    self._stop_known_service_processes()
 
             env = os.environ.copy()
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
             env["DISPATCHARR_VOD_NEWZNAB_SERVICE"] = "1"
+            env["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = self.version
             env["DISPATCHARR_SKIP_PLUGIN_AUTODISCOVERY"] = "1"
             env["PYTHONPATH"] = self._child_pythonpath()
             python_executable = self._python_executable()
@@ -186,7 +298,7 @@ class Plugin:
             bootstrap_log = BOOTSTRAP_LOG_FILE.open("ab", buffering=0)
             try:
                 process = subprocess.Popen(
-                    [python_executable, str(ROOT / "service.py")],
+                    [python_executable, str(SERVICE_SCRIPT)],
                     cwd=os.getcwd(),
                     env=env,
                     stdin=subprocess.DEVNULL,
@@ -201,7 +313,6 @@ class Plugin:
             PID_FILE.write_text(str(process.pid))
             log.info("Started embedded service process pid=%s using %s", process.pid, python_executable)
 
-            _, port, probe_host = self._service_settings()
             deadline = time.monotonic() + 5.0
             while time.monotonic() < deadline:
                 if process.poll() is not None:
@@ -211,8 +322,21 @@ class Plugin:
                         f"Embedded service exited with code {process.returncode}"
                         + (f":\n{detail}" if detail else "")
                     )
-                if self._health_ok(probe_host, port):
-                    log.info("Embedded service health check passed at %s:%s", probe_host, port)
+                health = self._service_health(probe_host, port)
+                if health and str(health.get("version") or "") == self.version:
+                    reported_pid = health.get("pid")
+                    if str(reported_pid) != str(process.pid):
+                        log.warning(
+                            "Health endpoint reported pid=%s while newly started pid=%s",
+                            reported_pid,
+                            process.pid,
+                        )
+                    log.info(
+                        "Embedded service health check passed at %s:%s version=%s",
+                        probe_host,
+                        port,
+                        self.version,
+                    )
                     return process.pid
                 time.sleep(0.1)
 
@@ -232,38 +356,29 @@ class Plugin:
         LOCK_FILE.touch(exist_ok=True)
         with LOCK_FILE.open("r+") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            pid = self._read_pid()
-            if not pid:
-                return False
-            if self._pid_alive(pid):
-                log.info("Stopping embedded service pid=%s", pid)
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                deadline = time.monotonic() + 5
-                while self._pid_alive(pid) and time.monotonic() < deadline:
-                    time.sleep(0.1)
-                if self._pid_alive(pid):
-                    log.warning("Embedded service pid=%s did not stop cleanly; sending SIGKILL", pid)
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-            PID_FILE.unlink(missing_ok=True)
-            return True
+            _, port, probe_host = self._service_settings()
+            health = self._service_health(probe_host, port)
+            return self._stop_known_service_processes(health)
 
     def _status(self, settings):
         pid = self._read_pid()
-        running = bool(pid and self._pid_alive(pid))
         host = str(settings.get("listen_host") or "0.0.0.0")
         port = int(settings.get("listen_port") or 9192)
         probe_host = "127.0.0.1" if host in {"0.0.0.0", "::", ""} else host
-        healthy = self._health_ok(probe_host, port, timeout=2) if running else False
+        health = self._service_health(probe_host, port, timeout=2)
+        running_version = str((health or {}).get("version") or "")
+        running = bool(health)
+        healthy = bool(health and running_version == self.version)
+        try:
+            health_pid = int((health or {}).get("pid"))
+        except (TypeError, ValueError):
+            health_pid = None
         result = {
-            "status": "ok" if healthy else ("starting" if running else "stopped"),
-            "pid": pid if running else None,
+            "status": "ok" if healthy else ("stale" if running else "stopped"),
+            "pid": health_pid or (pid if pid and self._process_is_ours(pid) else None),
             "listen": f"{host}:{port}",
+            "installed_version": self.version,
+            "running_version": running_version or None,
             "newznab_path": "/api",
             "sab_path": "/api",
             "api_key": settings.get("api_key") or "",
