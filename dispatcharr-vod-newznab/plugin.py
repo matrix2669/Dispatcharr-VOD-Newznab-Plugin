@@ -10,16 +10,27 @@ from pathlib import Path
 from urllib.request import urlopen
 
 
-log = logging.getLogger(__name__)
+PLUGIN_NAME = "Dispatcharr VOD Newznab"
 ROOT = Path(__file__).resolve().parent
 PLUGIN_KEY = ROOT.name.replace(" ", "_").lower()
 PID_FILE = ROOT / ".servarr_service.pid"
 LOCK_FILE = ROOT / ".servarr_service.lock"
 LOG_FILE = ROOT / "servarr_service.log"
+BOOTSTRAP_LOG_FILE = ROOT / "servarr_service_bootstrap.log"
+
+
+class _PluginLogAdapter(logging.LoggerAdapter):
+    """Prefix messages while retaining Dispatcharr's plugin logger namespace."""
+
+    def process(self, msg, kwargs):
+        return f"[{PLUGIN_NAME}] {msg}", kwargs
+
+
+log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 
 class Plugin:
-    name = "Dispatcharr VOD Newznab"
+    name = PLUGIN_NAME
     version = "0.1.1"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
@@ -30,9 +41,10 @@ class Plugin:
     def __init__(self):
         try:
             self._ensure_api_key()
-            self._ensure_service()
+            pid = self._ensure_service()
+            log.info("Embedded Newznab/SAB service available (pid=%s)", pid)
         except Exception:
-            log.exception("Unable to start Dispatcharr VOD Newznab service")
+            log.exception("Unable to start embedded Newznab/SAB service")
 
     @staticmethod
     def _config():
@@ -46,6 +58,7 @@ class Plugin:
             settings["api_key"] = secrets.token_urlsafe(32)
             cfg.settings = settings
             cfg.save(update_fields=["settings", "updated_at"])
+            log.info("Generated Newznab/SAB API key")
 
     @staticmethod
     def _pid_alive(pid):
@@ -64,36 +77,35 @@ class Plugin:
 
     @staticmethod
     def _child_pythonpath():
-        """Preserve Dispatcharr's import path in the standalone service child.
-
-        Executing service.py directly makes Python use the plugin directory as
-        sys.path[0]. Dispatcharr itself is normally imported from an application
-        path injected by the parent process, so copy the parent's import search
-        path into PYTHONPATH before launching the child.
-        """
+        """Preserve Dispatcharr's import path in the standalone service child."""
         entries = []
         for value in list(sys.path) + [os.environ.get("PYTHONPATH", "")]:
             for entry in str(value or "").split(os.pathsep):
                 entry = entry.strip()
                 if not entry:
-                    # Empty sys.path entries mean the parent's current working
-                    # directory; materialize it because the child has a script
-                    # directory as sys.path[0].
                     entry = os.getcwd()
                 if entry not in entries:
                     entries.append(entry)
         return os.pathsep.join(entries)
 
     @staticmethod
-    def _tail_log(max_bytes=8192):
+    def _tail_file(path, max_bytes=8192):
         try:
-            with LOG_FILE.open("rb") as fh:
+            with Path(path).open("rb") as fh:
                 fh.seek(0, os.SEEK_END)
                 size = fh.tell()
                 fh.seek(max(0, size - max_bytes), os.SEEK_SET)
                 return fh.read().decode("utf-8", errors="replace").strip()
         except Exception:
             return ""
+
+    @classmethod
+    def _tail_log(cls, max_bytes=8192):
+        main_tail = cls._tail_file(LOG_FILE, max_bytes=max_bytes)
+        bootstrap_tail = cls._tail_file(BOOTSTRAP_LOG_FILE, max_bytes=max_bytes // 2)
+        if main_tail and bootstrap_tail:
+            return f"{main_tail}\n--- bootstrap ---\n{bootstrap_tail}"
+        return main_tail or bootstrap_tail
 
     def _service_settings(self):
         cfg = self._config()
@@ -125,26 +137,25 @@ class Plugin:
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
             env["PYTHONPATH"] = self._child_pythonpath()
 
-            logfile = LOG_FILE.open("ab", buffering=0)
+            bootstrap_log = BOOTSTRAP_LOG_FILE.open("ab", buffering=0)
             try:
                 process = subprocess.Popen(
                     [sys.executable, str(ROOT / "service.py")],
                     cwd=os.getcwd(),
                     env=env,
                     stdin=subprocess.DEVNULL,
-                    stdout=logfile,
+                    stdout=bootstrap_log,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
                     close_fds=True,
                 )
             finally:
-                logfile.close()
+                bootstrap_log.close()
 
             PID_FILE.write_text(str(process.pid))
+            log.info("Started embedded service process pid=%s", process.pid)
 
-            # Do not report a successful start until the child either serves
-            # /health or proves it has exited. This catches missing imports and
-            # bind failures immediately instead of leaving a stale PID file.
+            # Catch import/bind failures immediately instead of leaving a stale PID.
             _, port, probe_host = self._service_settings()
             deadline = time.monotonic() + 5.0
             while time.monotonic() < deadline:
@@ -152,23 +163,26 @@ class Plugin:
                     PID_FILE.unlink(missing_ok=True)
                     detail = self._tail_log()
                     raise RuntimeError(
-                        f"Embedded Newznab/SAB service exited with code {process.returncode}"
+                        f"Embedded service exited with code {process.returncode}"
                         + (f":\n{detail}" if detail else "")
                     )
                 if self._health_ok(probe_host, port):
+                    log.info("Embedded service health check passed at %s:%s", probe_host, port)
                     return process.pid
                 time.sleep(0.1)
 
             if process.poll() is None:
-                # The service may still be initializing its Django imports. Keep
-                # the live PID and let Service Status report 'starting'.
+                log.warning(
+                    "Embedded service pid=%s is still starting after 5 seconds; check %s",
+                    process.pid,
+                    LOG_FILE,
+                )
                 return process.pid
 
             PID_FILE.unlink(missing_ok=True)
             detail = self._tail_log()
             raise RuntimeError(
-                f"Embedded Newznab/SAB service failed to start"
-                + (f":\n{detail}" if detail else "")
+                "Embedded service failed to start" + (f":\n{detail}" if detail else "")
             )
 
     def _stop_service(self):
@@ -179,6 +193,7 @@ class Plugin:
             if not pid:
                 return False
             if self._pid_alive(pid):
+                log.info("Stopping embedded service pid=%s", pid)
                 try:
                     os.kill(pid, signal.SIGTERM)
                 except ProcessLookupError:
@@ -187,6 +202,7 @@ class Plugin:
                 while self._pid_alive(pid) and time.monotonic() < deadline:
                     time.sleep(0.1)
                 if self._pid_alive(pid):
+                    log.warning("Embedded service pid=%s did not stop cleanly; sending SIGKILL", pid)
                     try:
                         os.kill(pid, signal.SIGKILL)
                     except ProcessLookupError:
@@ -209,6 +225,7 @@ class Plugin:
             "sab_path": "/api",
             "api_key": settings.get("api_key") or "",
             "log_file": str(LOG_FILE),
+            "bootstrap_log_file": str(BOOTSTRAP_LOG_FILE),
         }
         if not healthy:
             tail = self._tail_log(4096)
@@ -219,7 +236,9 @@ class Plugin:
     def run(self, action, params, context):
         settings = context.get("settings") or {}
         if action == "status":
-            return self._status(settings)
+            result = self._status(settings)
+            log.info("Service status requested: %s", result.get("status"))
+            return result
         if action == "restart":
             self._stop_service()
             pid = self._ensure_service()
@@ -229,6 +248,7 @@ class Plugin:
         if action == "stop":
             self._stop_service()
             return {"status": "stopped"}
+        log.warning("Unknown plugin action requested: %s", action)
         return {"status": "error", "message": f"Unknown action: {action}"}
 
     def stop(self, context=None):
