@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import threading
 import time
@@ -7,7 +8,10 @@ from pathlib import Path
 from .config import PLUGIN_DIR
 from .descriptors import decode_descriptor, extract_descriptor_from_nzb
 from .mustarrd import MustarrdClient
-from .provider import resolve_source
+from .provider import dispatcharr_proxy_source
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobState:
@@ -56,10 +60,13 @@ def _category_for(payload, requested, settings):
 def addfile(nzb_data, requested_category, settings):
     token = extract_descriptor_from_nzb(nzb_data)
     payload = decode_descriptor(token, settings["api_key"])
-    account_id = int(payload["dispatcharr_account_id"])
     media_id = str(payload["media_id"])
-    extension = str(payload.get("container_extension") or "mp4")
-    source_url = resolve_source(payload.get("kind"), account_id, media_id, extension)
+    source_url = dispatcharr_proxy_source(payload, settings)
+    logger.info(
+        "Submitting %s stream %s to Mustarrd through Dispatcharr proxy",
+        payload.get("kind"),
+        media_id,
+    )
     client = MustarrdClient(settings)
     created = client.create_external(
         media_id=media_id,
