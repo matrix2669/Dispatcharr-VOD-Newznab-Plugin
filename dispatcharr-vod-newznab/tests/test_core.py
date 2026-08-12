@@ -16,8 +16,8 @@ class ConfigTests(unittest.TestCase):
     def test_system_ffprobe_default(self):
         self.assertEqual(DEFAULTS["ffprobe_path"], "/usr/bin/ffprobe")
 
-    def test_dispatcharr_proxy_default(self):
-        self.assertEqual(DEFAULTS["dispatcharr_url"], "http://dispatcharr:9191")
+    def test_dispatcharr_proxy_requires_explicit_url(self):
+        self.assertEqual(DEFAULTS["dispatcharr_url"], "")
 
     def test_sab_category_directory(self):
         self.assertEqual(sab_category_dir("radarr"), "mustarrd/radarr")
