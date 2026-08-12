@@ -32,7 +32,7 @@ log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.2"
+    version = "0.1.3"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
@@ -40,6 +40,11 @@ class Plugin:
     actions = []
 
     def __init__(self):
+        # The detached HTTP service initializes Django so it can use Dispatcharr's
+        # ORM/models. If Dispatcharr's plugin autodiscovery is ever reached in that
+        # child, never recursively start another copy of this service.
+        if os.environ.get("DISPATCHARR_VOD_NEWZNAB_SERVICE", "").lower() in {"1", "true", "yes"}:
+            return
         try:
             self._ensure_api_key()
             pid = self._ensure_service()
@@ -174,6 +179,12 @@ class Plugin:
             env = os.environ.copy()
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
+            env["DISPATCHARR_VOD_NEWZNAB_SERVICE"] = "1"
+            # The child only needs Django models. Prevent django.setup() from
+            # importing every enabled Dispatcharr plugin again, which otherwise
+            # re-runs plugin constructors/schedulers and can recursively spawn
+            # additional service processes.
+            env["DISPATCHARR_SKIP_PLUGIN_AUTODISCOVERY"] = "1"
             env["PYTHONPATH"] = self._child_pythonpath()
             python_executable = self._python_executable()
 
