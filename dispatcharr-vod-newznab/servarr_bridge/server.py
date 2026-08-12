@@ -91,16 +91,22 @@ class Handler(BaseHTTPRequestHandler):
             results = search_movies(_one(params, "tmdbid"), _one(params, "q"), settings)
         elif mode == "tvsearch":
             season_raw = _one(params, "season")
-            if season_raw is None:
-                raise ValueError("season is required for TV search")
             ep_raw = _one(params, "ep")
-            results = search_tv(
-                _one(params, "tmdbid"),
-                _one(params, "q"),
-                _int(season_raw),
-                _int(ep_raw) if ep_raw not in {None, ""} else None,
-                settings,
-            )
+            if season_raw in {None, ""}:
+                # Sonarr uses an unqualified tvsearch request for recent-results
+                # probing and while testing a Newznab indexer. This is a valid
+                # Newznab request and must return an RSS response rather than a
+                # client error. This VOD bridge has no meaningful "recent TV"
+                # feed, so answer with an empty result set.
+                results = []
+            else:
+                results = search_tv(
+                    _one(params, "tmdbid"),
+                    _one(params, "q"),
+                    _int(season_raw),
+                    _int(ep_raw) if ep_raw not in {None, ""} else None,
+                    settings,
+                )
         elif mode == "search":
             results = []
         else:
