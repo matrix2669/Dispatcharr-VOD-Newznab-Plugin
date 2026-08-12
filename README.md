@@ -61,7 +61,7 @@ Important settings:
 
 - **Listen Address / Port**: defaults to `0.0.0.0:9192`.
 - **Newznab / SAB API Key**: generated automatically.
-- **Dispatcharr URL Seen by Mustarrd**: defaults to `http://dispatcharr:9191`. Set this to the Dispatcharr base URL that Mustarrd can actually reach.
+- **Dispatcharr URL Seen by Mustarrd**: required. Set the exact Dispatcharr base URL that Mustarrd can reach, including scheme and port when needed. There is no guessed hostname/default.
 - **Mustarrd URL / Username / Password**: credentials for a local Mustarrd user.
 - **Mustarrd Account ID**: existing Mustarrd account used for job ownership/concurrency.
 - **Completed Directory Seen by Sonarr/Radarr**: e.g. `/completed`.
@@ -188,7 +188,7 @@ Newznab results contain a small signed synthetic NZB. It contains no provider us
 On `addfile`, the plugin verifies the descriptor, reads the SAB category supplied by Servarr, constructs the SAB-compatible output path, and resolves the exact account/stream again. If Dispatcharr's importer did not retain that raw variant, the plugin creates the missing `M3UMovieRelation` or `M3UEpisodeRelation` for that real provider stream. The source passed to Mustarrd is then a Dispatcharr-native proxy URL of the form:
 
 ```text
-http://DISPATCHARR:9191/proxy/vod/movie/<uuid>/mustarrd_<session>?m3u_account_id=<id>&stream_id=<provider-stream-id>
+<configured-dispatcharr-url>/proxy/vod/movie/<uuid>/mustarrd_<session>?m3u_account_id=<id>&stream_id=<provider-stream-id>
 ```
 
 Episodes use `/proxy/vod/episode/...` in the same way.
