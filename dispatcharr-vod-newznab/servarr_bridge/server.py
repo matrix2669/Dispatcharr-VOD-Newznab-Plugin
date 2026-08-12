@@ -11,6 +11,7 @@ from django.db import close_old_connections
 
 from .config import PLUGIN_DIR, get_settings, normalized_api_key
 from .newznab import caps_xml, grab_nzb, rss_xml, search_movies, search_tv
+from .recent import recent_tv_results
 from . import sab
 
 
@@ -93,12 +94,11 @@ class Handler(BaseHTTPRequestHandler):
             season_raw = _one(params, "season")
             ep_raw = _one(params, "ep")
             if season_raw in {None, ""}:
-                # Sonarr uses an unqualified tvsearch request for recent-results
-                # probing and while testing a Newznab indexer. This is a valid
-                # Newznab request and must return an RSS response rather than a
-                # client error. This VOD bridge has no meaningful "recent TV"
-                # feed, so answer with an empty result set.
-                results = []
+                # Sonarr uses an unqualified tvsearch request for indexer
+                # validation and RSS/recent polling. Return a small set of real
+                # raw-provider VOD episodes so both workflows receive meaningful
+                # results in the advertised TV categories.
+                results = recent_tv_results(settings)
             else:
                 results = search_tv(
                     _one(params, "tmdbid"),
