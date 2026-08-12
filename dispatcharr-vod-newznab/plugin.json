@@ -1,6 +1,6 @@
 {
   "name": "Dispatcharr VOD Newznab",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Expose raw Dispatcharr VOD providers to Sonarr/Radarr as a Newznab indexer and SABnzbd-compatible download client backed by Mustarrd.",
   "author": "matrix2669",
   "fields": [
@@ -11,7 +11,7 @@
     {"id":"mustarrd_url","label":"Mustarrd URL","type":"string","default":"http://mustarrd:4177"},
     {"id":"mustarrd_username","label":"Mustarrd Username","type":"string","default":""},
     {"id":"mustarrd_password","label":"Mustarrd Password","type":"string","input_type":"password","default":""},
-    {"id":"mustarrd_account_id","label":"Mustarrd Account ID","type":"number","default":1,"help_text":"Existing Mustarrd account used for ownership/concurrency of external VOD jobs."},
+    {"id":"mustarrd_account_id","label":"Mustarrd Account ID","type":"number","default":1,"help_text":"Existing Mustarrd account used for job ownership/concurrency of external VOD jobs."},
     {"id":"servarr_completed_dir","label":"Completed Directory Seen by Sonarr/Radarr","type":"string","default":"/completed"},
     {"id":"sonarr_category","label":"Sonarr SAB Category","type":"string","default":"sonarr","help_text":"Completed jobs use mustarrd/<category>/<release>/<release>.<ext>, matching SABnzbd job-folder behavior."},
     {"id":"radarr_category","label":"Radarr SAB Category","type":"string","default":"radarr","help_text":"Completed jobs use mustarrd/<category>/<release>/<release>.<ext>, matching SABnzbd job-folder behavior."},
