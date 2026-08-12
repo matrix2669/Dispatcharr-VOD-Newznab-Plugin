@@ -20,7 +20,9 @@ def caps_xml():
     searching = ET.SubElement(caps, "searching")
     ET.SubElement(searching, "search", available="yes", supportedParams="q")
     ET.SubElement(searching, "movie-search", available="yes", supportedParams="q,tmdbid")
-    ET.SubElement(searching, "tv-search", available="yes", supportedParams="q,tmdbid,season,ep")
+    # Sonarr will aggregate supported IDs into one request.  We use TMDB to
+    # locate raw Xtream variants and carry TVDB through as release identity.
+    ET.SubElement(searching, "tv-search", available="yes", supportedParams="q,tvdbid,tmdbid,season,ep")
     categories = ET.SubElement(caps, "categories")
     movie = ET.SubElement(categories, "category", id="2000", name="Movies")
     ET.SubElement(movie, "subcat", id="2040", name="Movies/HD")
@@ -102,9 +104,16 @@ def search_movies(tmdbid, query, settings):
     return results
 
 
-def search_tv(tmdbid, query, season, episode, settings):
+def search_tv(tmdbid, query, season, episode, settings, tvdbid=None):
     if season is None:
         return []
+    # Dispatcharr/provider catalogs currently have TMDB but not a reliable TVDB
+    # mapping.  Never turn a TVDB-only request with no text query into an
+    # unbounded catalog match; wait for Sonarr's title fallback instead.
+    if not tmdbid and not query:
+        return []
+
+    tvdb_id = str(tvdbid or "").strip()
     results = []
     max_variants = max(1, int(settings.get("max_variants") or 20))
     for candidate in series_candidates(tmdbid, query, settings):
@@ -138,6 +147,7 @@ def search_tv(tmdbid, query, season, episode, settings):
                 "media_id": variant["episode_id"],
                 "container_extension": variant["extension"],
                 "tmdb_id": variant["tmdb_id"],
+                "tvdb_id": tvdb_id,
                 "content_name": variant["series_name"],
                 "year": variant["year"],
                 "season": variant["season"],
@@ -154,6 +164,7 @@ def search_tv(tmdbid, query, season, episode, settings):
                 "category": _category(video, "tv"),
                 "size": size,
                 "tmdb_id": variant["tmdb_id"],
+                "tvdb_id": tvdb_id,
             })
             if len(results) >= max_variants:
                 return results
@@ -179,7 +190,13 @@ def rss_xml(results, base_url, api_key, offset=0, limit=100):
         ET.SubElement(item, "category").text = result["category"]
         ET.SubElement(item, "description").text = result["title"]
         ET.SubElement(item, "enclosure", url=grab, length=str(result["size"]), type="application/x-nzb")
-        for name, value in (("category", result["category"]), ("size", result["size"]), ("tmdbid", result.get("tmdb_id"))):
+        attrs = (
+            ("category", result["category"]),
+            ("size", result["size"]),
+            ("tmdbid", result.get("tmdb_id")),
+            ("tvdbid", result.get("tvdb_id")),
+        )
+        for name, value in attrs:
             if value not in {None, ""}:
                 ET.SubElement(item, f"{{{NEWZNAB_NS}}}attr", name=name, value=str(value))
     return ET.tostring(rss, encoding="utf-8", xml_declaration=True)
