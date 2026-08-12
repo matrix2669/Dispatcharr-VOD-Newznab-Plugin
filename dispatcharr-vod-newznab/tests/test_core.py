@@ -16,6 +16,9 @@ class ConfigTests(unittest.TestCase):
     def test_system_ffprobe_default(self):
         self.assertEqual(DEFAULTS["ffprobe_path"], "/usr/bin/ffprobe")
 
+    def test_dispatcharr_proxy_default(self):
+        self.assertEqual(DEFAULTS["dispatcharr_url"], "http://dispatcharr:9191")
+
 
 class DescriptorTests(unittest.TestCase):
     def test_signed_nzb_round_trip(self):
@@ -68,6 +71,18 @@ class TemplateTests(unittest.TestCase):
             path,
             "mustarrd/Movies/L.A. Confidential (1997) {tmdb-2118}/L.A.Confidential.1997.1080p.WEB-DL.SDR.H264.AAC5.1-MUSTARRD.mkv",
         )
+
+    def test_movie_template_does_not_duplicate_provider_year(self):
+        path = movie_output_path(
+            DEFAULTS,
+            title="Michael (2026)",
+            year=2026,
+            tmdb_id="936075",
+            release="Michael.2026.2160p.WEB-DL.DV.HEVC.DDP5.1-MUSTARRD",
+            extension="mkv",
+        )
+        self.assertIn("Movies/Michael (2026) {tmdb-936075}/", path)
+        self.assertNotIn("Michael (2026) (2026)", path)
 
     def test_tv_template(self):
         path = tv_output_path(
