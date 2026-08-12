@@ -12,6 +12,7 @@ from .provider import dispatcharr_proxy_source
 
 
 logger = logging.getLogger(__name__)
+SAB_ID_PREFIX = "mustarrd-"
 
 
 class JobState:
@@ -57,6 +58,31 @@ def _category_for(payload, requested, settings):
     return settings.get("radarr_category", "radarr") if payload.get("kind") == "movie" else settings.get("sonarr_category", "sonarr")
 
 
+def _new_sab_id(job_id):
+    return f"{SAB_ID_PREFIX}{job_id}"
+
+
+def _sab_id(job_id, state=None):
+    """Return the stable SAB-facing ID for a Mustarrd job.
+
+    Existing state created before v0.1.8 has no sab_id. Preserve its raw ID so
+    an in-flight job keeps the same identifier across an upgrade. New jobs are
+    namespaced to avoid collisions in Servarr's download tracking cache/history.
+    """
+    state = state if isinstance(state, dict) else STATE.get(job_id)
+    saved = str(state.get("sab_id") or "").strip()
+    return saved or str(job_id)
+
+
+def _mustarrd_id(sab_id):
+    text = str(sab_id or "").strip()
+    if text.startswith(SAB_ID_PREFIX):
+        text = text[len(SAB_ID_PREFIX):]
+    if not text:
+        raise ValueError("Missing Mustarrd job ID")
+    return text
+
+
 def addfile(nzb_data, requested_category, settings):
     token = extract_descriptor_from_nzb(nzb_data)
     payload = decode_descriptor(token, settings["api_key"])
@@ -82,14 +108,17 @@ def addfile(nzb_data, requested_category, settings):
         duration_minutes=int(payload.get("duration_minutes") or 0),
     )
     job_id = str(created["id"])
+    sab_id = _new_sab_id(job_id)
     STATE.set(job_id, {
+        "sab_id": sab_id,
         "category": category,
         "title": release,
         "kind": payload.get("kind"),
         "relative_output_path": relative_output_path,
         "created_at": time.time(),
     })
-    return {"status": True, "nzo_ids": [job_id]}
+    logger.info("Mapped Mustarrd job %s to SAB nzo_id %s", job_id, sab_id)
+    return {"status": True, "nzo_ids": [sab_id]}
 
 
 def _queue_status(status):
@@ -137,7 +166,7 @@ def queue(settings, category=None, start=0, limit=100):
             "cat": state.get("category") or "",
             "mbleft": round(left, 3),
             "percentage": progress,
-            "nzo_id": job_id,
+            "nzo_id": _sab_id(job_id, state),
         })
     start = max(0, int(start or 0))
     limit = max(1, int(limit or 100))
@@ -182,7 +211,7 @@ def history(settings, category=None, start=0, limit=100):
             "download_time": download_time,
             "storage": _storage_path(settings, state, row),
             "status": status,
-            "nzo_id": job_id,
+            "nzo_id": _sab_id(job_id, state),
             "name": title,
         })
     start = max(0, int(start or 0))
@@ -198,19 +227,27 @@ def delete_job(settings, job_id, history=False):
     call deletes that now-finished row. SAB queue deletion is a removal, so
     perform both phases when necessary and then discard our local mapping.
     """
-    job_id = str(job_id)
+    sab_id = str(job_id)
+    mustarrd_id = _mustarrd_id(sab_id)
     client = shared_client(settings)
-    result = client.delete(job_id) or {}
+    result = client.delete(mustarrd_id) or {}
     if str(result.get("status") or "").lower() == "cancelled":
-        result = client.delete(job_id) or result
-    STATE.delete(job_id)
-    logger.info("Removed SAB job %s from Mustarrd (history=%s)", job_id, history)
+        result = client.delete(mustarrd_id) or result
+    STATE.delete(mustarrd_id)
+    logger.info(
+        "Removed SAB job %s (Mustarrd job %s) from Mustarrd (history=%s)",
+        sab_id,
+        mustarrd_id,
+        history,
+    )
     return {"status": True}
 
 
 def retry_job(settings, job_id):
-    shared_client(settings).retry(job_id)
-    return {"status": True, "nzo_id": str(job_id)}
+    sab_id = str(job_id)
+    mustarrd_id = _mustarrd_id(sab_id)
+    shared_client(settings).retry(mustarrd_id)
+    return {"status": True, "nzo_id": sab_id}
 
 
 def version():
