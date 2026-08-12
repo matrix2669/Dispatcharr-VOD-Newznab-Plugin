@@ -5,7 +5,13 @@ import threading
 import time
 from pathlib import Path, PurePosixPath
 
-from .config import PLUGIN_DIR, sab_category_dir, sab_output_path
+from .config import (
+    PLUGIN_DIR,
+    STATE_DIR,
+    infer_sab_state_from_output_path,
+    sab_category_dir,
+    sab_output_path,
+)
 from .descriptors import decode_descriptor, extract_descriptor_from_nzb
 from .mustarrd import shared_client
 from .provider import dispatcharr_proxy_source
@@ -17,8 +23,33 @@ SAB_ID_PREFIX = "mustarrd-"
 
 class JobState:
     def __init__(self):
-        self.path = PLUGIN_DIR / "servarr_jobs.json"
+        self.path = STATE_DIR / "servarr_jobs.json"
+        self.legacy_path = PLUGIN_DIR / "servarr_jobs.json"
         self.lock = threading.RLock()
+        self._prepare_storage()
+
+    def _prepare_storage(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self.path.exists() or not self.legacy_path.exists():
+            return
+        try:
+            data = json.loads(self.legacy_path.read_text())
+            if not isinstance(data, dict):
+                return
+            self._write(data)
+            logger.info(
+                "Migrated Servarr bridge state from %s to persistent path %s",
+                self.legacy_path,
+                self.path,
+            )
+        except Exception:
+            logger.exception("Unable to migrate legacy Servarr bridge state")
+
+    def _write(self, data):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
+        os.replace(tmp, self.path)
 
     def _load(self):
         try:
@@ -35,17 +66,13 @@ class JobState:
         with self.lock:
             data = self._load()
             data[str(job_id)] = value
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
-            os.replace(tmp, self.path)
+            self._write(data)
 
     def delete(self, job_id):
         with self.lock:
             data = self._load()
             data.pop(str(job_id), None)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
-            os.replace(tmp, self.path)
+            self._write(data)
 
 
 STATE = JobState()
@@ -81,6 +108,31 @@ def _mustarrd_id(sab_id):
     if not text:
         raise ValueError("Missing Mustarrd job ID")
     return text
+
+
+def _state_for_row(job_id, row):
+    """Return bridge metadata, recovering it from Mustarrd's path if needed."""
+    state = dict(STATE.get(job_id) or {})
+    inferred = infer_sab_state_from_output_path(row.get("output_path"))
+    if not inferred:
+        return state
+
+    changed = False
+    for key, value in inferred.items():
+        if value and not state.get(key):
+            state[key] = value
+            changed = True
+    if changed:
+        # Do not invent sab_id while recovering legacy jobs. A pre-v0.1.8 grab
+        # may have been recorded in Servarr using the raw Mustarrd ID, and
+        # changing it after completion would break that association.
+        STATE.set(job_id, state)
+        logger.info(
+            "Recovered Servarr bridge state for Mustarrd job %s from output path (category=%s)",
+            job_id,
+            state.get("category"),
+        )
+    return state
 
 
 def addfile(nzb_data, requested_category, settings):
@@ -137,10 +189,10 @@ def _history_status(status):
     }.get(str(status), "Failed")
 
 
-def _category_matches(job_id, requested):
+def _category_matches(state, requested):
     if not requested:
         return True
-    return str(STATE.get(job_id).get("category") or "") == str(requested)
+    return str(state.get("category") or "") == str(requested)
 
 
 def queue(settings, category=None, start=0, limit=100):
@@ -148,9 +200,9 @@ def queue(settings, category=None, start=0, limit=100):
     slots = []
     for row in rows:
         job_id = str(row.get("id"))
-        if not _category_matches(job_id, category):
+        state = _state_for_row(job_id, row)
+        if not _category_matches(state, category):
             continue
-        state = STATE.get(job_id)
         total = int(row.get("file_size") or 0)
         done = int(row.get("downloaded_bytes") or 0)
         progress = int(float(row.get("progress") or 0))
@@ -189,9 +241,9 @@ def history(settings, category=None, start=0, limit=100):
     slots = []
     for row in rows:
         job_id = str(row.get("id"))
-        if not _category_matches(job_id, category):
+        state = _state_for_row(job_id, row)
+        if not _category_matches(state, category):
             continue
-        state = STATE.get(job_id)
         completed = row.get("completed_at")
         created = row.get("created_at")
         download_time = 0
