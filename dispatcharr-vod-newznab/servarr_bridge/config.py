@@ -19,7 +19,7 @@ DEFAULTS = {
     "radarr_category": "radarr",
     "movie_template": "mustarrd/Movies/{title} ({year}) {tmdb_tag}/{release}.{ext}",
     "tv_template": "mustarrd/TV Shows/{series} ({year}) {tmdb_tag}/Season {season:02d}/{release}.{ext}",
-    "ffprobe_path": "ffprobe",
+    "ffprobe_path": "/usr/bin/ffprobe",
     "probe_timeout": 20,
     "catalog_cache_seconds": 300,
     "max_variants": 20,
