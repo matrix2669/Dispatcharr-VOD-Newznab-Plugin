@@ -30,14 +30,14 @@ The plugin deliberately queries the **original Xtream providers configured in Di
 ## Requirements
 
 - A current Dispatcharr build with plugin support.
-- `ffprobe` available in the Dispatcharr container/process environment.
+- `ffprobe` available at `/usr/bin/ffprobe` by default. The path is configurable.
 - Mustarrd with `POST /api/vod/external/download` support.
 - A dedicated local Mustarrd user is recommended for the plugin.
 - The Mustarrd completed folder must be mounted into Sonarr/Radarr. Configure **Completed Directory Seen by Sonarr/Radarr** to the path those applications see.
 
 ## Install
 
-Install from the Matrix2669 Dispatcharr plugin registry once v0.1.0 is published, or copy the `dispatcharr-vod-newznab` directory to Dispatcharr's plugin directory, for example:
+Install from the Matrix2669 Dispatcharr plugin registry, or copy the `dispatcharr-vod-newznab` directory to Dispatcharr's plugin directory, for example:
 
 ```text
 /data/plugins/dispatcharr-vod-newznab/
@@ -57,6 +57,7 @@ Important settings:
 - **Mustarrd Account ID**: existing Mustarrd account used for job ownership/concurrency.
 - **Completed Directory Seen by Sonarr/Radarr**: e.g. `/completed`.
 - **Movie Output Template** and **TV Output Template**: resolved by this plugin and sent to Mustarrd as a safe relative output path.
+- **ffprobe Path**: defaults to `/usr/bin/ffprobe`.
 - **Respect Enabled Dispatcharr VOD Groups**: limits raw provider results to VOD categories enabled for each account in Dispatcharr.
 
 Default movie template:
@@ -74,6 +75,24 @@ mustarrd/TV Shows/{series} ({year}) {tmdb_tag}/Season {season:02d}/{release}.{ex
 Available movie tokens: `{title}`, `{year}`, `{tmdb_id}`, `{tmdb_tag}`, `{release}`, `{ext}`.
 
 TV also supports: `{series}`, `{season}`, `{episode}`.
+
+## Service logging and diagnostics
+
+The plugin uses Dispatcharr's `apps.plugins.loader` logger for plugin lifecycle messages, prefixed with `[Dispatcharr VOD Newznab]`.
+
+The detached Newznab/SAB service writes its own rotating log beside the installed plugin:
+
+```text
+/data/plugins/dispatcharr-vod-newznab/servarr_service.log
+```
+
+The log rotates at 5 MB and keeps three backups. Very early child-process stdout/stderr is captured separately in:
+
+```text
+/data/plugins/dispatcharr-vod-newznab/servarr_service_bootstrap.log
+```
+
+**Service Status** reports both paths and returns the tail of the logs when the service is unhealthy. Startup now validates `/health` and reports child import/bind failures instead of leaving a stale PID file.
 
 ## Radarr / Sonarr indexer
 
