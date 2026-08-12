@@ -32,7 +32,7 @@ log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.4"
+    version = "0.1.5"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
@@ -172,7 +172,6 @@ class Plugin:
                 _, port, probe_host = self._service_settings()
                 if self._health_ok(probe_host, port):
                     return pid
-                # A stale/reused PID must not prevent recovery.
                 log.warning("PID file references live pid=%s but service health check failed; restarting", pid)
                 PID_FILE.unlink(missing_ok=True)
 
@@ -180,10 +179,6 @@ class Plugin:
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
             env["DISPATCHARR_VOD_NEWZNAB_SERVICE"] = "1"
-            # The child only needs Django models. Prevent django.setup() from
-            # importing every enabled Dispatcharr plugin again, which otherwise
-            # re-runs plugin constructors/schedulers and can recursively spawn
-            # additional service processes.
             env["DISPATCHARR_SKIP_PLUGIN_AUTODISCOVERY"] = "1"
             env["PYTHONPATH"] = self._child_pythonpath()
             python_executable = self._python_executable()
@@ -204,13 +199,8 @@ class Plugin:
                 bootstrap_log.close()
 
             PID_FILE.write_text(str(process.pid))
-            log.info(
-                "Started embedded service process pid=%s using %s",
-                process.pid,
-                python_executable,
-            )
+            log.info("Started embedded service process pid=%s using %s", process.pid, python_executable)
 
-            # Catch import/bind failures immediately instead of leaving a stale PID.
             _, port, probe_host = self._service_settings()
             deadline = time.monotonic() + 5.0
             while time.monotonic() < deadline:
@@ -236,9 +226,7 @@ class Plugin:
 
             PID_FILE.unlink(missing_ok=True)
             detail = self._tail_log()
-            raise RuntimeError(
-                "Embedded service failed to start" + (f":\n{detail}" if detail else "")
-            )
+            raise RuntimeError("Embedded service failed to start" + (f":\n{detail}" if detail else ""))
 
     def _stop_service(self):
         LOCK_FILE.touch(exist_ok=True)
