@@ -34,7 +34,7 @@ log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.10"
+    version = "0.1.11"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
