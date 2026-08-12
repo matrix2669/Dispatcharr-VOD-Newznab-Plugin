@@ -1,12 +1,13 @@
 {
   "name": "Dispatcharr VOD Newznab",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Expose raw Dispatcharr VOD providers to Sonarr/Radarr as a Newznab indexer and SABnzbd-compatible download client backed by Mustarrd.",
   "author": "matrix2669",
   "fields": [
     {"id":"listen_host","label":"Listen Address","type":"string","default":"0.0.0.0"},
     {"id":"listen_port","label":"Listen Port","type":"number","default":9192},
     {"id":"api_key","label":"Newznab / SAB API Key","type":"string","default":"","help_text":"Generated automatically when the plugin is first enabled."},
+    {"id":"dispatcharr_url","label":"Dispatcharr URL Seen by Mustarrd","type":"string","default":"http://dispatcharr:9191","help_text":"Base Dispatcharr URL Mustarrd can reach. Selected VOD downloads are forced through Dispatcharr's native VOD proxy so they appear in Dispatcharr stats."},
     {"id":"mustarrd_url","label":"Mustarrd URL","type":"string","default":"http://mustarrd:4177"},
     {"id":"mustarrd_username","label":"Mustarrd Username","type":"string","default":""},
     {"id":"mustarrd_password","label":"Mustarrd Password","type":"string","input_type":"password","default":""},
