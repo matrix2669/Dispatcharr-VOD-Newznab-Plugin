@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 
 from .config import PLUGIN_DIR, sab_category_dir, sab_output_path
 from .descriptors import decode_descriptor, extract_descriptor_from_nzb
-from .mustarrd import MustarrdClient
+from .mustarrd import shared_client
 from .provider import dispatcharr_proxy_source
 
 
@@ -65,10 +65,6 @@ def addfile(nzb_data, requested_category, settings):
     release = payload.get("release") or "Mustarrd.VOD"
     category = _category_for(payload, requested_category, settings)
 
-    # The SAB category is only known when Servarr submits the NZB. Always build
-    # the final output path here rather than trusting a path embedded in an old
-    # search result. This mirrors SAB's category root + per-job folder layout:
-    # mustarrd/<category>/<release>/<release>.<ext>
     relative_output_path = sab_output_path(category, release, extension)
 
     source_url = dispatcharr_proxy_source(payload, settings)
@@ -78,8 +74,7 @@ def addfile(nzb_data, requested_category, settings):
         media_id,
         relative_output_path,
     )
-    client = MustarrdClient(settings)
-    created = client.create_external(
+    created = shared_client(settings).create_external(
         media_id=media_id,
         title=release,
         source_url=source_url,
@@ -120,7 +115,7 @@ def _category_matches(job_id, requested):
 
 
 def queue(settings, category=None, start=0, limit=100):
-    rows = MustarrdClient(settings).queue() or []
+    rows = shared_client(settings).queue() or []
     slots = []
     for row in rows:
         job_id = str(row.get("id"))
@@ -161,7 +156,7 @@ def _storage_path(settings, state, row):
 
 
 def history(settings, category=None, start=0, limit=100):
-    rows = MustarrdClient(settings).history() or []
+    rows = shared_client(settings).history() or []
     slots = []
     for row in rows:
         job_id = str(row.get("id"))
@@ -196,14 +191,14 @@ def history(settings, category=None, start=0, limit=100):
 
 
 def delete_job(settings, job_id, history=False):
-    MustarrdClient(settings).delete(job_id)
+    shared_client(settings).delete(job_id)
     if history:
         STATE.delete(job_id)
     return {"status": True}
 
 
 def retry_job(settings, job_id):
-    MustarrdClient(settings).retry(job_id)
+    shared_client(settings).retry(job_id)
     return {"status": True, "nzo_id": str(job_id)}
 
 
