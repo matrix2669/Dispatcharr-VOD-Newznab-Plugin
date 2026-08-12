@@ -10,7 +10,7 @@ DEFAULTS = {
     "listen_host": "0.0.0.0",
     "listen_port": 9192,
     "api_key": "",
-    "dispatcharr_url": "http://dispatcharr:9191",
+    "dispatcharr_url": "",
     "mustarrd_url": "http://mustarrd:4177",
     "mustarrd_username": "",
     "mustarrd_password": "",
