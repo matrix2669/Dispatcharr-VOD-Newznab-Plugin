@@ -2,6 +2,7 @@ import fcntl
 import logging
 import os
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -31,7 +32,7 @@ log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.1"
+    version = "0.1.2"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
@@ -89,6 +90,40 @@ class Plugin:
         return os.pathsep.join(entries)
 
     @staticmethod
+    def _python_executable():
+        """Return a real Python interpreter, never uWSGI's sys.executable.
+
+        Dispatcharr runs the web app under uWSGI, where ``sys.executable`` may
+        point at the uWSGI binary. Passing that to Popen makes uWSGI interpret
+        service.py as a uWSGI configuration file instead of executing Python.
+        Prefer Dispatcharr's configured virtualenv interpreter so Django and all
+        installed dependencies are identical to the parent process.
+        """
+        candidates = [
+            os.environ.get("DISPATCHARR_PYTHON"),
+            "/dispatcharrpy/bin/python",
+            str(Path(sys.prefix) / "bin" / "python"),
+            shutil.which("python3"),
+            shutil.which("python"),
+        ]
+        seen = set()
+        for candidate in candidates:
+            candidate = str(candidate or "").strip()
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            try:
+                path = Path(candidate)
+                if path.is_file() and os.access(path, os.X_OK):
+                    return str(path)
+            except Exception:
+                continue
+        raise RuntimeError(
+            "Could not find a Python interpreter for the embedded service "
+            f"(parent sys.executable={sys.executable!r}, sys.prefix={sys.prefix!r})"
+        )
+
+    @staticmethod
     def _tail_file(path, max_bytes=8192):
         try:
             with Path(path).open("rb") as fh:
@@ -129,18 +164,23 @@ class Plugin:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             pid = self._read_pid()
             if pid and self._pid_alive(pid):
-                return pid
-            PID_FILE.unlink(missing_ok=True)
+                _, port, probe_host = self._service_settings()
+                if self._health_ok(probe_host, port):
+                    return pid
+                # A stale/reused PID must not prevent recovery.
+                log.warning("PID file references live pid=%s but service health check failed; restarting", pid)
+                PID_FILE.unlink(missing_ok=True)
 
             env = os.environ.copy()
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
             env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
             env["PYTHONPATH"] = self._child_pythonpath()
+            python_executable = self._python_executable()
 
             bootstrap_log = BOOTSTRAP_LOG_FILE.open("ab", buffering=0)
             try:
                 process = subprocess.Popen(
-                    [sys.executable, str(ROOT / "service.py")],
+                    [python_executable, str(ROOT / "service.py")],
                     cwd=os.getcwd(),
                     env=env,
                     stdin=subprocess.DEVNULL,
@@ -153,7 +193,11 @@ class Plugin:
                 bootstrap_log.close()
 
             PID_FILE.write_text(str(process.pid))
-            log.info("Started embedded service process pid=%s", process.pid)
+            log.info(
+                "Started embedded service process pid=%s using %s",
+                process.pid,
+                python_executable,
+            )
 
             # Catch import/bind failures immediately instead of leaving a stale PID.
             _, port, probe_host = self._service_settings()
