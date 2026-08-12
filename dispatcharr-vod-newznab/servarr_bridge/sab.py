@@ -3,9 +3,9 @@ import logging
 import os
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from .config import PLUGIN_DIR
+from .config import PLUGIN_DIR, sab_category_dir, sab_output_path
 from .descriptors import decode_descriptor, extract_descriptor_from_nzb
 from .mustarrd import MustarrdClient
 from .provider import dispatcharr_proxy_source
@@ -61,26 +61,37 @@ def addfile(nzb_data, requested_category, settings):
     token = extract_descriptor_from_nzb(nzb_data)
     payload = decode_descriptor(token, settings["api_key"])
     media_id = str(payload["media_id"])
+    extension = str(payload.get("container_extension") or "mkv")
+    release = payload.get("release") or "Mustarrd.VOD"
+    category = _category_for(payload, requested_category, settings)
+
+    # The SAB category is only known when Servarr submits the NZB. Always build
+    # the final output path here rather than trusting a path embedded in an old
+    # search result. This mirrors SAB's category root + per-job folder layout:
+    # mustarrd/<category>/<release>/<release>.<ext>
+    relative_output_path = sab_output_path(category, release, extension)
+
     source_url = dispatcharr_proxy_source(payload, settings)
     logger.info(
-        "Submitting %s stream %s to Mustarrd through Dispatcharr proxy",
+        "Submitting %s stream %s to Mustarrd through Dispatcharr proxy as %s",
         payload.get("kind"),
         media_id,
+        relative_output_path,
     )
     client = MustarrdClient(settings)
     created = client.create_external(
         media_id=media_id,
-        title=payload.get("release") or "Mustarrd VOD",
+        title=release,
         source_url=source_url,
-        relative_output_path=payload["relative_output_path"],
+        relative_output_path=relative_output_path,
         duration_minutes=int(payload.get("duration_minutes") or 0),
     )
     job_id = str(created["id"])
     STATE.set(job_id, {
-        "category": _category_for(payload, requested_category, settings),
-        "title": payload.get("release") or "Mustarrd VOD",
+        "category": category,
+        "title": release,
         "kind": payload.get("kind"),
-        "relative_output_path": payload.get("relative_output_path"),
+        "relative_output_path": relative_output_path,
         "created_at": time.time(),
     })
     return {"status": True, "nzo_ids": [job_id]}
@@ -139,12 +150,14 @@ def queue(settings, category=None, start=0, limit=100):
 
 
 def _storage_path(settings, state, row):
+    """Return SAB's completed job directory, not the media file path."""
     rel = str(state.get("relative_output_path") or "").replace("\\", "/").lstrip("/")
     base = str(settings.get("servarr_completed_dir") or "/completed").rstrip("/")
     if rel:
-        return f"{base}/{rel}"
+        job_dir = str(PurePosixPath(rel).parent)
+        return f"{base}/{job_dir}" if job_dir not in {"", "."} else base
     output = str(row.get("output_path") or "")
-    return f"{base}/{Path(output).name}" if output else base
+    return str(Path(output).parent) if output else base
 
 
 def history(settings, category=None, start=0, limit=100):
@@ -203,8 +216,8 @@ def get_config(settings):
     sonarr = str(settings.get("sonarr_category") or "sonarr")
     radarr = str(settings.get("radarr_category") or "radarr")
     categories = [
-        {"priority": 0, "pp": "", "name": sonarr, "script": "", "dir": ""},
-        {"priority": 0, "pp": "", "name": radarr, "script": "", "dir": ""},
+        {"priority": 0, "pp": "", "name": sonarr, "script": "", "dir": sab_category_dir(sonarr)},
+        {"priority": 0, "pp": "", "name": radarr, "script": "", "dir": sab_category_dir(radarr)},
     ]
     return {
         "config": {
