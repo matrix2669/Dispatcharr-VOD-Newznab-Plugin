@@ -14,7 +14,7 @@ from servarr_bridge.config import (
 )
 from servarr_bridge.descriptors import decode_descriptor, descriptor_nzb, encode_descriptor, extract_descriptor_from_nzb
 from servarr_bridge.probe import classify_dynamic_range
-from servarr_bridge.releases import build_movie_release
+from servarr_bridge.releases import build_episode_release, build_movie_release, clean_series_name
 
 
 class ConfigTests(unittest.TestCase):
@@ -96,14 +96,42 @@ class DynamicRangeTests(unittest.TestCase):
 
 
 class ReleaseTests(unittest.TestCase):
+    VIDEO_1080 = {"width": 1920, "height": 1080, "codec_name": "h264", "color_transfer": "bt709"}
+    AUDIO_51 = {"codec_name": "aac", "channels": 6, "channel_layout": "5.1"}
+
     def test_movie_release(self):
         release = build_movie_release(
             "L.A. Confidential",
             1997,
             {"width": 1920, "height": 800, "codec_name": "h264", "color_transfer": "bt709"},
-            {"codec_name": "aac", "channels": 6, "channel_layout": "5.1"},
+            self.AUDIO_51,
         )
         self.assertEqual(release, "L.A.Confidential.1997.1080p.WEB-DL.SDR.H264.AAC5.1-MUSTARRD")
+
+    def test_survivor_provider_name_is_cleaned_for_sonarr(self):
+        self.assertEqual(clean_series_name("EN - Survivor (2000) (US)", 2000), "Survivor")
+
+    def test_service_prefix_and_country_are_cleaned(self):
+        self.assertEqual(clean_series_name("4K-NF - Designated Survivor (US)", 2016), "Designated Survivor")
+        self.assertEqual(
+            clean_series_name("D+ - Primal Survivor: Mighty Mekong (2022) (US)", 2022),
+            "Primal Survivor: Mighty Mekong",
+        )
+        self.assertEqual(clean_series_name("EN - Australian Survivor (2002) (AU)", 2002), "Australian Survivor")
+
+    def test_tv_release_uses_clean_series_name_without_premiere_year(self):
+        release = build_episode_release(
+            "EN - Survivor (2000) (US)",
+            2000,
+            50,
+            13,
+            self.VIDEO_1080,
+            self.AUDIO_51,
+        )
+        self.assertEqual(
+            release,
+            "Survivor.S50E13.1080p.WEB-DL.SDR.H264.AAC5.1-MUSTARRD",
+        )
 
 
 if __name__ == "__main__":
