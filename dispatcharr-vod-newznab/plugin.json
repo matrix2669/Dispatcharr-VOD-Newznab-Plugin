@@ -1,6 +1,6 @@
 {
   "name": "Dispatcharr VOD Newznab",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Expose raw Dispatcharr VOD providers to Sonarr/Radarr as a Newznab indexer and SABnzbd-compatible download client backed by Mustarrd.",
   "author": "matrix2669",
   "fields": [
