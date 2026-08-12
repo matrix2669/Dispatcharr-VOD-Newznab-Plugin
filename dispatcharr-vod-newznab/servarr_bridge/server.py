@@ -125,6 +125,7 @@ class Handler(BaseHTTPRequestHandler):
                     _int(season_raw),
                     _int(ep_raw) if ep_raw not in {None, ""} else None,
                     settings,
+                    tvdbid=_one(params, "tvdbid"),
                 )
         elif mode == "search":
             results = []
