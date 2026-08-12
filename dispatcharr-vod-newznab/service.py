@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -6,15 +7,34 @@ from pathlib import Path
 
 
 ROOT = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR") or Path(__file__).resolve().parent)
-LOG_FILE = ROOT / "servarr_service.log"
+STATE_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_STATE_DIR") or "/data/dispatcharr_vod_newznab")
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = STATE_DIR / "servarr_service.log"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dispatcharr.settings")
+os.environ["DISPATCHARR_VOD_NEWZNAB_STATE_DIR"] = str(STATE_DIR)
+
+
+def _installed_version():
+    try:
+        payload = json.loads((ROOT / "plugin.json").read_text())
+        return str(payload.get("version") or "").strip()
+    except Exception:
+        return ""
+
+
+installed_version = _installed_version()
+if installed_version:
+    # The parent Dispatcharr worker may still have an older Plugin class loaded
+    # immediately after an atomic plugin update. The child always trusts the
+    # manifest currently installed on disk.
+    os.environ["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = installed_version
 
 
 def _configure_logging():
-    """Give the detached service one predictable, bounded log destination."""
+    """Give the detached service one predictable, bounded persistent log."""
     root = logging.getLogger()
     for handler in list(root.handlers):
         root.removeHandler(handler)
@@ -38,15 +58,16 @@ def _configure_logging():
     root.addHandler(handler)
     root.setLevel(logging.INFO)
     logging.captureWarnings(True)
-
-    # Keep request/library noise from drowning out search, SAB and provider logs.
     logging.getLogger("django.db.backends").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 _configure_logging()
 logger = logging.getLogger("dispatcharr_vod_newznab.service")
-logger.info("Starting embedded Newznab/SAB service")
+logger.info(
+    "Starting embedded Newznab/SAB service version %s",
+    os.environ.get("DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION", "unknown"),
+)
 
 try:
     import django
@@ -55,9 +76,6 @@ except Exception:
     logger.exception("Django initialization failed")
     raise
 
-# Django may apply its own LOGGING configuration during setup. Reassert the
-# detached service's bounded file handler afterwards so all bridge modules and
-# request failures consistently land in servarr_service.log.
 _configure_logging()
 logger = logging.getLogger("dispatcharr_vod_newznab.service")
 
