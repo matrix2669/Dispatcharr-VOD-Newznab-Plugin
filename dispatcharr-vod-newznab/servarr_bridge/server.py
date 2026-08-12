@@ -15,6 +15,7 @@ from . import sab
 
 
 logger = logging.getLogger(__name__)
+SERVICE_VERSION = str(os.environ.get("DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION") or "unknown")
 
 
 def _one(params, name, default=None):
@@ -48,9 +49,6 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "DispatcharrVODNewznab/0.1"
 
     def log_message(self, fmt, *args):
-        # Startup/status checks can generate several health probes across
-        # Dispatcharr's uWSGI workers. Keep normal service logs focused on
-        # Newznab, SAB and provider activity instead.
         if self.path == "/health":
             logger.debug("%s - %s", self.address_string(), fmt % args)
             return
@@ -155,7 +153,12 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query, keep_blank_values=True)
         if parsed.path == "/health":
-            return self._send(200, {"status": "ok", "service": "dispatcharr-vod-newznab"})
+            return self._send(200, {
+                "status": "ok",
+                "service": "dispatcharr-vod-newznab",
+                "version": SERVICE_VERSION,
+                "pid": os.getpid(),
+            })
 
         settings = self._settings_and_auth(params)
         if parsed.path.startswith("/grab/") and parsed.path.endswith(".nzb"):
@@ -216,7 +219,13 @@ def run_server():
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
 
-    logger.info("Dispatcharr VOD Newznab/SAB service listening on %s:%s", host, port)
+    logger.info(
+        "Dispatcharr VOD Newznab/SAB service version %s listening on %s:%s (pid=%s)",
+        SERVICE_VERSION,
+        host,
+        port,
+        os.getpid(),
+    )
     try:
         server.serve_forever(poll_interval=0.5)
     finally:
