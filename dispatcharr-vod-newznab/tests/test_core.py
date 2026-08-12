@@ -12,6 +12,11 @@ from servarr_bridge.probe import classify_dynamic_range
 from servarr_bridge.releases import build_movie_release
 
 
+class ConfigTests(unittest.TestCase):
+    def test_system_ffprobe_default(self):
+        self.assertEqual(DEFAULTS["ffprobe_path"], "/usr/bin/ffprobe")
+
+
 class DescriptorTests(unittest.TestCase):
     def test_signed_nzb_round_trip(self):
         payload = {"version": 1, "kind": "movie", "media_id": "123", "release": "Movie.2026.1080p-MUSTARRD"}
