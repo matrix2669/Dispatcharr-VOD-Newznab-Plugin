@@ -5,6 +5,7 @@ from pathlib import Path
 
 PLUGIN_KEY = os.environ.get("DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY", "dispatcharr-vod-newznab-plugin")
 PLUGIN_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR") or Path(__file__).resolve().parents[1])
+STATE_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_STATE_DIR") or "/data/dispatcharr_vod_newznab")
 
 DEFAULTS = {
     "listen_host": "0.0.0.0",
@@ -84,3 +85,37 @@ def sab_output_path(category, release, extension):
     release_name = release_token(release)
     ext = extension_token(extension)
     return f"{category_dir}/{release_name}/{release_name}.{ext}"
+
+
+def infer_sab_state_from_output_path(output_path):
+    """Recover SAB metadata from a Mustarrd output path.
+
+    External Servarr jobs always use:
+
+      .../mustarrd/<category>/<release>/<release>.<ext>
+
+    This makes queue/history self-healing if the small bridge state file is
+    missing or was created by an older plugin version. Ordinary Mustarrd DVR
+    recordings do not contain the ``mustarrd`` path component and are ignored.
+    """
+    text = str(output_path or "").strip().replace("\\", "/")
+    if not text:
+        return {}
+    parts = [part for part in text.split("/") if part]
+    marker = None
+    for index in range(len(parts) - 1, -1, -1):
+        if parts[index] == "mustarrd":
+            marker = index
+            break
+    if marker is None or marker + 2 >= len(parts):
+        return {}
+
+    category = parts[marker + 1]
+    release = parts[marker + 2]
+    if not category or not release:
+        return {}
+    return {
+        "category": category,
+        "title": release,
+        "relative_output_path": "/".join(parts[marker:]),
+    }
