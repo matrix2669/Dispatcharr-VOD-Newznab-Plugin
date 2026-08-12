@@ -48,6 +48,12 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "DispatcharrVODNewznab/0.1"
 
     def log_message(self, fmt, *args):
+        # Startup/status checks can generate several health probes across
+        # Dispatcharr's uWSGI workers. Keep normal service logs focused on
+        # Newznab, SAB and provider activity instead.
+        if self.path == "/health":
+            logger.debug("%s - %s", self.address_string(), fmt % args)
+            return
         logger.info("%s - %s", self.address_string(), fmt % args)
 
     def _send(self, status, body, content_type="application/json", headers=None):
