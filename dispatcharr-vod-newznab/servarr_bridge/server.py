@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 import threading
 from email import policy
 from email.parser import BytesParser
@@ -29,6 +30,24 @@ def _int(value, default=0):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _installed_plugin_version():
+    """Read the version currently installed on disk.
+
+    Dispatcharr replaces the whole plugin directory during managed upgrades.
+    The detached bridge process can therefore keep running old imported code
+    even though the files at PLUGIN_DIR now belong to a newer release. Reading
+    plugin.json through the stable install path lets the child detect that swap
+    without relying on Dispatcharr to re-import plugin.py first.
+    """
+    try:
+        payload = json.loads((PLUGIN_DIR / "plugin.json").read_text())
+        return str(payload.get("version") or "").strip()
+    except Exception:
+        # Atomic plugin replacement has a short window where the path may be
+        # absent. Treat that as transient instead of stopping the service.
+        return ""
 
 
 def _multipart_file(content_type, body, field_name="name"):
@@ -225,6 +244,30 @@ def run_server():
     signal.signal(signal.SIGTERM, stop_handler)
     signal.signal(signal.SIGINT, stop_handler)
 
+    stop_watch = threading.Event()
+    restart_version = {"value": ""}
+
+    def watch_installed_version():
+        while not stop_watch.wait(2.0):
+            installed = _installed_plugin_version()
+            if not installed or installed == SERVICE_VERSION:
+                continue
+            restart_version["value"] = installed
+            logger.info(
+                "Detected plugin update on disk: running=%s installed=%s; restarting detached service",
+                SERVICE_VERSION,
+                installed,
+            )
+            server.shutdown()
+            return
+
+    watcher = threading.Thread(
+        target=watch_installed_version,
+        name="dispatcharr-vod-newznab-version-watch",
+        daemon=True,
+    )
+    watcher.start()
+
     logger.info(
         "Dispatcharr VOD Newznab/SAB service version %s listening on %s:%s (pid=%s)",
         SERVICE_VERSION,
@@ -235,7 +278,25 @@ def run_server():
     try:
         server.serve_forever(poll_interval=0.5)
     finally:
+        stop_watch.set()
         server.server_close()
+
+        installed = restart_version["value"]
+        if installed:
+            env = os.environ.copy()
+            env["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = installed
+            service_script = PLUGIN_DIR / "service.py"
+            logger.info(
+                "Re-executing detached service from updated plugin version %s using %s",
+                installed,
+                service_script,
+            )
+            os.execve(
+                sys.executable,
+                [sys.executable, str(service_script)],
+                env,
+            )
+
         pid_file = PLUGIN_DIR / ".servarr_service.pid"
         try:
             if pid_file.exists() and pid_file.read_text().strip() == str(os.getpid()):
