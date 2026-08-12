@@ -17,22 +17,16 @@ ROOT = Path(__file__).resolve().parent
 PLUGIN_KEY = ROOT.name.replace(" ", "_").lower()
 STATE_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_STATE_DIR") or "/data/dispatcharr_vod_newznab")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
-PID_FILE = STATE_DIR / "servarr_service.pid"
-LOCK_FILE = STATE_DIR / "servarr_service.lock"
+PID_FILE = STATE_DIR / ".servarr_service.pid"
+LOCK_FILE = STATE_DIR / ".servarr_service.lock"
 LOG_FILE = STATE_DIR / "servarr_service.log"
 BOOTSTRAP_LOG_FILE = STATE_DIR / "servarr_service_bootstrap.log"
 SERVICE_SCRIPT = (ROOT / "service.py").resolve()
 
 
-def _manifest_version():
-    try:
-        payload = json.loads((ROOT / "plugin.json").read_text())
-        return str(payload.get("version") or "").strip()
-    except Exception:
-        return ""
-
-
 class _PluginLogAdapter(logging.LoggerAdapter):
+    """Prefix messages while retaining Dispatcharr's plugin logger namespace."""
+
     def process(self, msg, kwargs):
         return f"[{PLUGIN_NAME}] {msg}", kwargs
 
@@ -40,106 +34,32 @@ class _PluginLogAdapter(logging.LoggerAdapter):
 log = _PluginLogAdapter(logging.getLogger("apps.plugins.loader"), {})
 
 
+def _installed_version():
+    try:
+        payload = json.loads((ROOT / "plugin.json").read_text())
+        return str(payload.get("version") or "").strip()
+    except Exception:
+        return ""
+
+
 class Plugin:
     name = PLUGIN_NAME
-    version = _manifest_version() or "0.1.11"
+    version = "0.1.12"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
-    fields = []
+
+    fields = []  # plugin.json is authoritative
     actions = []
 
     def __init__(self):
         if os.environ.get("DISPATCHARR_VOD_NEWZNAB_SERVICE", "").lower() in {"1", "true", "yes"}:
             return
-        try:
-            self._ensure_api_key()
-            pid = self._ensure_service()
-            log.info("Embedded Newznab/SAB service available (pid=%s, version=%s)", pid, self._desired_version())
-        except Exception:
-            log.exception("Unable to start embedded Newznab/SAB service")
+        self._ensure_service()
 
-    @staticmethod
-    def _config():
-        from apps.plugins.models import PluginConfig
-        return PluginConfig.objects.get(key=PLUGIN_KEY)
+    def _desired_version(self):
+        return _installed_version() or self.version
 
-    @classmethod
-    def _desired_version(cls):
-        # Read the installed manifest every time. Dispatcharr may still hold an
-        # older Plugin class in memory immediately after an atomic plugin update.
-        return _manifest_version() or cls.version
-
-    def _ensure_api_key(self):
-        cfg = self._config()
-        settings = dict(cfg.settings or {})
-        if not str(settings.get("api_key") or "").strip():
-            settings["api_key"] = secrets.token_urlsafe(32)
-            cfg.settings = settings
-            cfg.save(update_fields=["settings", "updated_at"])
-            log.info("Generated Newznab/SAB API key")
-
-    @staticmethod
-    def _pid_alive(pid):
-        try:
-            os.kill(int(pid), 0)
-            return True
-        except (OSError, TypeError, ValueError):
-            return False
-
-    @classmethod
-    def _read_pid(cls):
-        try:
-            return int(PID_FILE.read_text().strip())
-        except Exception:
-            return None
-
-    @staticmethod
-    def _cmdline(pid):
-        try:
-            raw = Path(f"/proc/{int(pid)}/cmdline").read_bytes()
-            return [part.decode("utf-8", errors="replace") for part in raw.split(b"\x00") if part]
-        except Exception:
-            return []
-
-    @classmethod
-    def _process_is_ours(cls, pid):
-        if not cls._pid_alive(pid):
-            return False
-        for arg in cls._cmdline(pid):
-            try:
-                if Path(arg).resolve() == SERVICE_SCRIPT:
-                    return True
-            except Exception:
-                continue
-        return False
-
-    @classmethod
-    def _find_service_pids(cls):
-        result = []
-        try:
-            entries = Path("/proc").iterdir()
-        except Exception:
-            return result
-        for entry in entries:
-            if not entry.name.isdigit():
-                continue
-            pid = int(entry.name)
-            if cls._process_is_ours(pid):
-                result.append(pid)
-        return sorted(set(result))
-
-    @staticmethod
-    def _child_pythonpath():
-        entries = []
-        for value in list(sys.path) + [os.environ.get("PYTHONPATH", "")]:
-            for entry in str(value or "").split(os.pathsep):
-                entry = entry.strip() or os.getcwd()
-                if entry not in entries:
-                    entries.append(entry)
-        return os.pathsep.join(entries)
-
-    @staticmethod
-    def _python_executable():
+    def _interpreter(self):
         candidates = [
             os.environ.get("DISPATCHARR_PYTHON"),
             "/dispatcharrpy/bin/python",
@@ -147,211 +67,162 @@ class Plugin:
             shutil.which("python3"),
             shutil.which("python"),
         ]
-        for candidate in dict.fromkeys(str(v or "").strip() for v in candidates):
-            if not candidate:
-                continue
-            path = Path(candidate)
-            if path.is_file() and os.access(path, os.X_OK):
-                return str(path)
-        raise RuntimeError(
-            "Could not find a Python interpreter for the embedded service "
-            f"(parent sys.executable={sys.executable!r}, sys.prefix={sys.prefix!r})"
-        )
+        for candidate in candidates:
+            if candidate and Path(candidate).exists():
+                return str(candidate)
+        raise RuntimeError("Unable to locate Python interpreter for detached service")
 
-    @staticmethod
-    def _tail_file(path, max_bytes=8192):
+    def _child_pythonpath(self):
+        roots = [str(ROOT), "/opt/dispatcharr"]
+        current = os.environ.get("PYTHONPATH")
+        if current:
+            roots.append(current)
+        return os.pathsep.join(roots)
+
+    def _read_pid(self):
         try:
-            with Path(path).open("rb") as fh:
-                fh.seek(0, os.SEEK_END)
-                size = fh.tell()
-                fh.seek(max(0, size - max_bytes), os.SEEK_SET)
-                return fh.read().decode("utf-8", errors="replace").strip()
+            return int(PID_FILE.read_text().strip())
         except Exception:
-            return ""
+            return None
 
-    @classmethod
-    def _tail_log(cls, max_bytes=8192):
-        main = cls._tail_file(LOG_FILE, max_bytes)
-        bootstrap = cls._tail_file(BOOTSTRAP_LOG_FILE, max_bytes // 2)
-        if main and bootstrap:
-            return f"{main}\n--- bootstrap ---\n{bootstrap}"
-        return main or bootstrap
-
-    def _service_settings(self):
-        settings = dict(self._config().settings or {})
-        host = str(settings.get("listen_host") or "0.0.0.0")
-        port = int(settings.get("listen_port") or 9192)
-        probe_host = "127.0.0.1" if host in {"0.0.0.0", "::", ""} else host
-        return host, port, probe_host
-
-    @staticmethod
-    def _service_health(host, port, timeout=0.5):
+    def _pid_is_service(self, pid):
+        if not pid or pid <= 1:
+            return False
         try:
-            with urlopen(f"http://{host}:{port}/health", timeout=timeout) as response:
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+        except Exception:
+            return False
+        return str(SERVICE_SCRIPT) in cmdline
+
+    def _discover_service_pid(self):
+        for proc in Path("/proc").iterdir():
+            if not proc.name.isdigit():
+                continue
+            pid = int(proc.name)
+            if self._pid_is_service(pid):
+                return pid
+        return None
+
+    def _service_pid(self):
+        pid = self._read_pid()
+        if self._pid_is_service(pid):
+            return pid
+        discovered = self._discover_service_pid()
+        if discovered:
+            try:
+                PID_FILE.write_text(str(discovered))
+            except Exception:
+                pass
+        return discovered
+
+    def _health(self):
+        try:
+            with urlopen("http://127.0.0.1:9192/health", timeout=2) as response:
                 if response.status != 200:
                     return None
                 payload = json.loads(response.read().decode("utf-8"))
-                if isinstance(payload, dict) and payload.get("status") == "ok":
-                    return payload
+                return payload if isinstance(payload, dict) else None
         except Exception:
-            pass
-        return None
+            return None
 
-    @classmethod
-    def _terminate_pid(cls, pid):
-        if not cls._process_is_ours(pid):
-            log.warning("Refusing to terminate pid=%s because it is not this plugin's service.py", pid)
-            return False
+    def _stop_pid(self, pid):
+        if not self._pid_is_service(pid):
+            return
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
-            return True
-        deadline = time.monotonic() + 5.0
-        while cls._pid_alive(pid) and time.monotonic() < deadline:
-            time.sleep(0.1)
-        if cls._pid_alive(pid):
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            deadline = time.monotonic() + 2.0
-            while cls._pid_alive(pid) and time.monotonic() < deadline:
-                time.sleep(0.05)
-        return not cls._pid_alive(pid)
-
-    def _stop_known_service_processes(self, health=None):
-        candidates = set(self._find_service_pids())
-        pid = self._read_pid()
-        if pid and self._process_is_ours(pid):
-            candidates.add(pid)
-        try:
-            health_pid = int((health or {}).get("pid"))
-        except (TypeError, ValueError):
-            health_pid = None
-        if health_pid and self._process_is_ours(health_pid):
-            candidates.add(health_pid)
-        for candidate in sorted(candidates):
-            self._terminate_pid(candidate)
-        PID_FILE.unlink(missing_ok=True)
-        return bool(candidates)
-
-    def _ensure_service(self):
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        LOCK_FILE.touch(exist_ok=True)
-        with LOCK_FILE.open("r+") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            _, port, probe_host = self._service_settings()
-            desired_version = self._desired_version()
-            health = self._service_health(probe_host, port)
-            running_version = str((health or {}).get("version") or "")
-
-            if health and running_version == desired_version:
-                try:
-                    pid = int(health.get("pid"))
-                except (TypeError, ValueError):
-                    pid = None
-                if pid and self._process_is_ours(pid):
-                    PID_FILE.write_text(str(pid))
-                    return pid
-
-            if health:
-                log.info(
-                    "Embedded service version mismatch: running=%s installed=%s; restarting",
-                    running_version or "legacy/unknown",
-                    desired_version,
-                )
-                if not self._stop_known_service_processes(health):
-                    raise RuntimeError("Service port is occupied by a process that cannot be identified safely")
-            else:
-                own_pids = self._find_service_pids()
-                if own_pids:
-                    self._stop_known_service_processes()
-
-            env = os.environ.copy()
-            env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
-            env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
-            env["DISPATCHARR_VOD_NEWZNAB_STATE_DIR"] = str(STATE_DIR)
-            env["DISPATCHARR_VOD_NEWZNAB_SERVICE"] = "1"
-            env["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = desired_version
-            env["DISPATCHARR_SKIP_PLUGIN_AUTODISCOVERY"] = "1"
-            env["PYTHONPATH"] = self._child_pythonpath()
-
-            bootstrap_log = BOOTSTRAP_LOG_FILE.open("ab", buffering=0)
-            try:
-                process = subprocess.Popen(
-                    [self._python_executable(), str(SERVICE_SCRIPT)],
-                    cwd=os.getcwd(),
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=bootstrap_log,
-                    stderr=subprocess.STDOUT,
-                    start_new_session=True,
-                    close_fds=True,
-                )
-            finally:
-                bootstrap_log.close()
-
-            PID_FILE.write_text(str(process.pid))
-            deadline = time.monotonic() + 5.0
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    PID_FILE.unlink(missing_ok=True)
-                    detail = self._tail_log()
-                    raise RuntimeError(
-                        f"Embedded service exited with code {process.returncode}"
-                        + (f":\n{detail}" if detail else "")
-                    )
-                health = self._service_health(probe_host, port)
-                if health and str(health.get("version") or "") == desired_version:
-                    return process.pid
-                time.sleep(0.1)
-            if process.poll() is None:
-                return process.pid
-            raise RuntimeError("Embedded service failed to start")
+            return
+        deadline = time.time() + 8
+        while time.time() < deadline:
+            if not self._pid_is_service(pid):
+                return
+            time.sleep(0.2)
+        if self._pid_is_service(pid):
+            os.kill(pid, signal.SIGKILL)
 
     def _stop_service(self):
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        LOCK_FILE.touch(exist_ok=True)
-        with LOCK_FILE.open("r+") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            _, port, probe_host = self._service_settings()
-            return self._stop_known_service_processes(self._service_health(probe_host, port))
+        pid = self._service_pid()
+        if pid:
+            self._stop_pid(pid)
+        try:
+            PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
 
-    def _status(self, settings):
-        host = str(settings.get("listen_host") or "0.0.0.0")
-        port = int(settings.get("listen_port") or 9192)
-        probe_host = "127.0.0.1" if host in {"0.0.0.0", "::", ""} else host
-        health = self._service_health(probe_host, port, timeout=2)
-        desired_version = self._desired_version()
-        running_version = str((health or {}).get("version") or "")
-        return {
-            "status": "ok" if health and running_version == desired_version else ("stale" if health else "stopped"),
-            "pid": (health or {}).get("pid") or self._read_pid(),
-            "listen": f"{host}:{port}",
-            "installed_version": desired_version,
-            "running_version": running_version or None,
-            "newznab_path": "/api",
-            "sab_path": "/api",
-            "api_key": settings.get("api_key") or "",
-            "state_dir": str(STATE_DIR),
-            "log_file": str(LOG_FILE),
-            "bootstrap_log_file": str(BOOTSTRAP_LOG_FILE),
-        }
+    def _start_service(self):
+        interpreter = self._interpreter()
+        env = os.environ.copy()
+        env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
+        env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
+        env["DISPATCHARR_VOD_NEWZNAB_STATE_DIR"] = str(STATE_DIR)
+        env["DISPATCHARR_VOD_NEWZNAB_SERVICE"] = "1"
+        env["DISPATCHARR_SKIP_PLUGIN_AUTODISCOVERY"] = "1"
+        env["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = self._desired_version()
+        env["PYTHONPATH"] = self._child_pythonpath()
 
-    def run(self, action, params, context):
-        settings = context.get("settings") or {}
-        if action == "status":
-            return self._status(settings)
-        if action == "restart":
+        with BOOTSTRAP_LOG_FILE.open("ab", buffering=0) as bootstrap:
+            process = subprocess.Popen(
+                [interpreter, str(SERVICE_SCRIPT)],
+                cwd=str(ROOT),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=bootstrap,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                close_fds=True,
+            )
+        PID_FILE.write_text(str(process.pid))
+        return process.pid
+
+    def _ensure_service(self):
+        with LOCK_FILE.open("a+") as lock_handle:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            desired_version = self._desired_version()
+            pid = self._service_pid()
+            health = self._health() if pid else None
+            running_version = str((health or {}).get("version") or "")
+
+            if pid and health and running_version == desired_version:
+                return
+
+            if pid:
+                if health:
+                    log.info(
+                        "Replacing stale detached service pid=%s running=%s installed=%s",
+                        pid,
+                        running_version or "unknown",
+                        desired_version,
+                    )
+                self._stop_pid(pid)
+                PID_FILE.unlink(missing_ok=True)
+
+            self._start_service()
+            deadline = time.time() + 12
+            while time.time() < deadline:
+                health = self._health()
+                if health and str(health.get("version") or "") == desired_version:
+                    return
+                time.sleep(0.25)
+            raise RuntimeError("Detached Newznab/SAB service failed health check after startup")
+
+    def run(self, action_id, params=None, context=None):
+        if action_id == "status":
+            health = self._health()
+            return {
+                "status": bool(health),
+                "service": health or {},
+                "pid": self._service_pid(),
+                "installed_version": self._desired_version(),
+                "log_file": str(LOG_FILE),
+            }
+        if action_id == "restart":
             self._stop_service()
-            pid = self._ensure_service()
-            result = self._status(settings)
-            result["pid"] = pid
-            return result
-        if action == "stop":
+            self._ensure_service()
+            return {"status": True, "message": "Service restarted", "service": self._health() or {}}
+        if action_id == "stop":
             self._stop_service()
-            return {"status": "stopped"}
-        return {"status": "error", "message": f"Unknown action: {action}"}
+            return {"status": True, "message": "Service stopped"}
+        raise ValueError(f"Unknown action: {action_id}")
 
     def stop(self, context=None):
         self._stop_service()
