@@ -1,6 +1,6 @@
 {
   "name": "Dispatcharr VOD Newznab",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Expose raw Dispatcharr VOD providers to Sonarr/Radarr as a Newznab indexer and SABnzbd-compatible download client backed by Mustarrd.",
   "author": "matrix2669",
   "fields": [
@@ -13,10 +13,8 @@
     {"id":"mustarrd_password","label":"Mustarrd Password","type":"string","input_type":"password","default":""},
     {"id":"mustarrd_account_id","label":"Mustarrd Account ID","type":"number","default":1,"help_text":"Existing Mustarrd account used for ownership/concurrency of external VOD jobs."},
     {"id":"servarr_completed_dir","label":"Completed Directory Seen by Sonarr/Radarr","type":"string","default":"/completed"},
-    {"id":"sonarr_category","label":"Sonarr SAB Category","type":"string","default":"sonarr"},
-    {"id":"radarr_category","label":"Radarr SAB Category","type":"string","default":"radarr"},
-    {"id":"movie_template","label":"Movie Output Template","type":"string","default":"mustarrd/Movies/{title} ({year}) {tmdb_tag}/{release}.{ext}"},
-    {"id":"tv_template","label":"TV Output Template","type":"string","default":"mustarrd/TV Shows/{series} ({year}) {tmdb_tag}/Season {season:02d}/{release}.{ext}"},
+    {"id":"sonarr_category","label":"Sonarr SAB Category","type":"string","default":"sonarr","help_text":"Completed jobs use mustarrd/<category>/<release>/<release>.<ext>, matching SABnzbd job-folder behavior."},
+    {"id":"radarr_category","label":"Radarr SAB Category","type":"string","default":"radarr","help_text":"Completed jobs use mustarrd/<category>/<release>/<release>.<ext>, matching SABnzbd job-folder behavior."},
     {"id":"ffprobe_path","label":"ffprobe Path","type":"string","default":"/usr/bin/ffprobe"},
     {"id":"probe_timeout","label":"Probe Timeout (seconds)","type":"number","default":20},
     {"id":"catalog_cache_seconds","label":"Raw Catalog Cache (seconds)","type":"number","default":300},
