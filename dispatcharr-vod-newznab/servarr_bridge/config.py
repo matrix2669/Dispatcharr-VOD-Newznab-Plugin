@@ -18,8 +18,6 @@ DEFAULTS = {
     "servarr_completed_dir": "/completed",
     "sonarr_category": "sonarr",
     "radarr_category": "radarr",
-    "movie_template": "mustarrd/Movies/{title} ({year}) {tmdb_tag}/{release}.{ext}",
-    "tv_template": "mustarrd/TV Shows/{series} ({year}) {tmdb_tag}/Season {season:02d}/{release}.{ext}",
     "ffprobe_path": "/usr/bin/ffprobe",
     "probe_timeout": 20,
     "catalog_cache_seconds": 300,
@@ -65,56 +63,24 @@ def release_token(value):
     return text or "Unknown"
 
 
-def tmdb_tag(tmdb_id):
-    value = re.sub(r"\D", "", str(tmdb_id or ""))
-    return f"{{tmdb-{value}}}" if value else ""
+def extension_token(value):
+    return re.sub(r"[^A-Za-z0-9]", "", str(value or "mkv")).lower() or "mkv"
 
 
-def _title_without_year(value, year):
-    text = sanitize_component(value)
-    if year:
-        text = re.sub(rf"\s*\({re.escape(str(year))}\)\s*$", "", text).strip()
-    return text or sanitize_component(value)
+def sab_category_dir(category):
+    """Relative completed-dir root exposed by the emulated SAB category."""
+    return f"mustarrd/{sanitize_component(category, fallback='default')}"
 
 
-def _render_relative(template, context):
-    rendered = str(template).format_map(context)
-    rendered = rendered.replace("\\", "/")
-    components = []
-    for raw in rendered.split("/"):
-        raw = re.sub(r"\s{2,}", " ", raw).strip()
-        raw = re.sub(r"\s*\(\s*\)\s*", " ", raw).strip()
-        if not raw or raw == ".":
-            continue
-        if raw == "..":
-            raise ValueError("Template generated an unsafe parent path")
-        components.append(sanitize_component(raw))
-    if not components:
-        raise ValueError("Template generated an empty output path")
-    return "/".join(components)
+def sab_output_path(category, release, extension):
+    """Return SAB-style job/file layout for a Servarr grab.
 
+    A real SAB category has its own completed directory and job folders enabled.
+    Mirror that layout so Servarr sees:
 
-def movie_output_path(settings, *, title, year, tmdb_id, release, extension):
-    context = {
-        "title": _title_without_year(title, year),
-        "year": str(year or ""),
-        "tmdb_id": str(tmdb_id or ""),
-        "tmdb_tag": tmdb_tag(tmdb_id),
-        "release": release_token(release),
-        "ext": re.sub(r"[^A-Za-z0-9]", "", str(extension or "mkv")).lower() or "mkv",
-    }
-    return _render_relative(settings.get("movie_template") or DEFAULTS["movie_template"], context)
-
-
-def tv_output_path(settings, *, series, year, tmdb_id, season, episode, release, extension):
-    context = {
-        "series": _title_without_year(series, year),
-        "year": str(year or ""),
-        "tmdb_id": str(tmdb_id or ""),
-        "tmdb_tag": tmdb_tag(tmdb_id),
-        "season": int(season or 0),
-        "episode": int(episode or 0),
-        "release": release_token(release),
-        "ext": re.sub(r"[^A-Za-z0-9]", "", str(extension or "mkv")).lower() or "mkv",
-    }
-    return _render_relative(settings.get("tv_template") or DEFAULTS["tv_template"], context)
+      mustarrd/<category>/<release>/<release>.<ext>
+    """
+    category_dir = sab_category_dir(category)
+    release_name = release_token(release)
+    ext = extension_token(extension)
+    return f"{category_dir}/{release_name}/{release_name}.{ext}"
