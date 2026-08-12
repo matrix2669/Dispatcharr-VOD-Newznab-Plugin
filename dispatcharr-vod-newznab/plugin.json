@@ -16,7 +16,7 @@
     {"id":"radarr_category","label":"Radarr SAB Category","type":"string","default":"radarr"},
     {"id":"movie_template","label":"Movie Output Template","type":"string","default":"mustarrd/Movies/{title} ({year}) {tmdb_tag}/{release}.{ext}"},
     {"id":"tv_template","label":"TV Output Template","type":"string","default":"mustarrd/TV Shows/{series} ({year}) {tmdb_tag}/Season {season:02d}/{release}.{ext}"},
-    {"id":"ffprobe_path","label":"ffprobe Path","type":"string","default":"ffprobe"},
+    {"id":"ffprobe_path","label":"ffprobe Path","type":"string","default":"/usr/bin/ffprobe"},
     {"id":"probe_timeout","label":"Probe Timeout (seconds)","type":"number","default":20},
     {"id":"catalog_cache_seconds","label":"Raw Catalog Cache (seconds)","type":"number","default":300},
     {"id":"max_variants","label":"Maximum Variants per Search","type":"number","default":20},
