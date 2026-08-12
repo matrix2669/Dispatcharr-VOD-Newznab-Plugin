@@ -10,6 +10,7 @@ DEFAULTS = {
     "listen_host": "0.0.0.0",
     "listen_port": 9192,
     "api_key": "",
+    "dispatcharr_url": "http://dispatcharr:9191",
     "mustarrd_url": "http://mustarrd:4177",
     "mustarrd_username": "",
     "mustarrd_password": "",
@@ -69,6 +70,13 @@ def tmdb_tag(tmdb_id):
     return f"{{tmdb-{value}}}" if value else ""
 
 
+def _title_without_year(value, year):
+    text = sanitize_component(value)
+    if year:
+        text = re.sub(rf"\s*\({re.escape(str(year))}\)\s*$", "", text).strip()
+    return text or sanitize_component(value)
+
+
 def _render_relative(template, context):
     rendered = str(template).format_map(context)
     rendered = rendered.replace("\\", "/")
@@ -88,7 +96,7 @@ def _render_relative(template, context):
 
 def movie_output_path(settings, *, title, year, tmdb_id, release, extension):
     context = {
-        "title": sanitize_component(title),
+        "title": _title_without_year(title, year),
         "year": str(year or ""),
         "tmdb_id": str(tmdb_id or ""),
         "tmdb_tag": tmdb_tag(tmdb_id),
@@ -100,7 +108,7 @@ def movie_output_path(settings, *, title, year, tmdb_id, release, extension):
 
 def tv_output_path(settings, *, series, year, tmdb_id, season, episode, release, extension):
     context = {
-        "series": sanitize_component(series),
+        "series": _title_without_year(series, year),
         "year": str(year or ""),
         "tmdb_id": str(tmdb_id or ""),
         "tmdb_tag": tmdb_tag(tmdb_id),
