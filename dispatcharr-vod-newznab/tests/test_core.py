@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from servarr_bridge.config import DEFAULTS, movie_output_path, tv_output_path
+from servarr_bridge.config import DEFAULTS, sab_category_dir, sab_output_path
 from servarr_bridge.descriptors import decode_descriptor, descriptor_nzb, encode_descriptor, extract_descriptor_from_nzb
 from servarr_bridge.probe import classify_dynamic_range
 from servarr_bridge.releases import build_movie_release
@@ -18,6 +18,19 @@ class ConfigTests(unittest.TestCase):
 
     def test_dispatcharr_proxy_default(self):
         self.assertEqual(DEFAULTS["dispatcharr_url"], "http://dispatcharr:9191")
+
+    def test_sab_category_directory(self):
+        self.assertEqual(sab_category_dir("radarr"), "mustarrd/radarr")
+
+    def test_sab_output_layout(self):
+        release = "Zootopia.2.2025.2160p.WEB-DL.DV.HEVC.DDP5.1-MUSTARRD"
+        self.assertEqual(
+            sab_output_path("radarr", release, "mkv"),
+            f"mustarrd/radarr/{release}/{release}.mkv",
+        )
+
+    def test_sab_category_is_sanitized(self):
+        self.assertEqual(sab_category_dir("../radarr"), "mustarrd/_radarr")
 
 
 class DescriptorTests(unittest.TestCase):
@@ -55,48 +68,6 @@ class DynamicRangeTests(unittest.TestCase):
 
     def test_sdr(self):
         self.assertEqual(classify_dynamic_range({"color_transfer": "bt709", "color_primaries": "bt709"}), "SDR")
-
-
-class TemplateTests(unittest.TestCase):
-    def test_movie_template(self):
-        path = movie_output_path(
-            DEFAULTS,
-            title="L.A. Confidential",
-            year=1997,
-            tmdb_id="2118",
-            release="L.A.Confidential.1997.1080p.WEB-DL.SDR.H264.AAC5.1-MUSTARRD",
-            extension="mkv",
-        )
-        self.assertEqual(
-            path,
-            "mustarrd/Movies/L.A. Confidential (1997) {tmdb-2118}/L.A.Confidential.1997.1080p.WEB-DL.SDR.H264.AAC5.1-MUSTARRD.mkv",
-        )
-
-    def test_movie_template_does_not_duplicate_provider_year(self):
-        path = movie_output_path(
-            DEFAULTS,
-            title="Michael (2026)",
-            year=2026,
-            tmdb_id="936075",
-            release="Michael.2026.2160p.WEB-DL.DV.HEVC.DDP5.1-MUSTARRD",
-            extension="mkv",
-        )
-        self.assertIn("Movies/Michael (2026) {tmdb-936075}/", path)
-        self.assertNotIn("Michael (2026) (2026)", path)
-
-    def test_tv_template(self):
-        path = tv_output_path(
-            DEFAULTS,
-            series="Acapulco",
-            year=2021,
-            tmdb_id="133727",
-            season=1,
-            episode=1,
-            release="Acapulco.2021.S01E01.2160p.WEB-DL.HDR10.HEVC.AAC2.0-MUSTARRD",
-            extension="mkv",
-        )
-        self.assertIn("Season 01", path)
-        self.assertTrue(path.endswith("-MUSTARRD.mkv"))
 
 
 class ReleaseTests(unittest.TestCase):
