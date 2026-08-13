@@ -326,10 +326,35 @@ def _episode_relation_for_proxy(account, payload, extension):
         episode_number=episode_number,
     ).first()
     if episode is None:
-        raise ValueError(
-            f"Dispatcharr episode not found for TMDB {tmdb_id} S{season:02d}E{episode_number:02d}; "
-            f"cannot proxy raw stream {stream_id}"
+        episode_title = str(payload.get("episode_title") or "").strip() or f"Episode {episode_number}"
+        try:
+            duration_secs = max(0, int(payload.get("duration_minutes") or 0) * 60)
+        except (TypeError, ValueError):
+            duration_secs = 0
+        episode, created = Episode.objects.get_or_create(
+            series=series,
+            season_number=season,
+            episode_number=episode_number,
+            defaults={
+                "name": episode_title,
+                "duration_secs": duration_secs or None,
+                "custom_properties": {
+                    "mustarrd_vod_newznab": {
+                        "materialized": True,
+                        "provider_stream_id": stream_id,
+                    }
+                },
+            },
         )
+        if created:
+            logger.info(
+                "Materialized missing Dispatcharr episode TMDB=%s S%02dE%02d episode=%s for raw stream %s",
+                tmdb_id,
+                season,
+                episode_number,
+                episode.id,
+                stream_id,
+            )
 
     series_relation = None
     external_series_id = str(payload.get("series_id") or "").strip()
