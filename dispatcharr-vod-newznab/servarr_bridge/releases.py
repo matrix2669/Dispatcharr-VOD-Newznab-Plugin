@@ -18,24 +18,16 @@ def clean_name(value, year=None):
 
 
 def clean_series_name(value, year=None):
-    """Remove provider decorations without changing the actual series title.
-
-    Dispatcharr intentionally preserves provider-facing names such as
-    ``EN - Survivor (2000) (US)``.  Those decorations are useful in its VOD UI
-    but make poor scene-style release names for Sonarr.  Strip only known
-    service/language prefixes plus trailing country/year metadata.
-    """
+    """Remove provider decorations without changing the actual series title."""
     text = str(value or "Unknown").strip()
     text = _SERIES_PREFIX_RE.sub("", text).strip()
 
-    # Country suffixes are provider metadata, not part of the scene title.
     while True:
         cleaned = _COUNTRY_SUFFIX_RE.sub("", text).strip()
         if cleaned == text:
             break
         text = cleaned
 
-    # Strip the stored premiere year only when it is a trailing metadata token.
     if year:
         text = re.sub(rf"\s*[\[(]{re.escape(str(year))}[\])]\s*$", "", text).strip()
 
@@ -63,9 +55,21 @@ def build_movie_release(title, year, video, audio):
 
 
 def build_episode_release(series, year, season, episode, video, audio):
-    # TV premiere years are metadata, not part of normal SxxExx scene identity.
-    # Keeping them out of the release title lets Sonarr match its canonical
-    # series name while TVDB/TMDB identifiers remain available separately.
     base = _dot(clean_series_name(series, year))
     base += f".S{int(season):02d}E{int(episode):02d}"
     return f"{base}.{_media_suffix(video, audio)}-MUSTARRD"
+
+
+def build_unprobed_movie_release(title, year):
+    """Build a conservative recent-feed title without inventing media traits."""
+    base = _dot(clean_name(title, year))
+    if year:
+        base += f".{year}"
+    return f"{base}.WEB-DL-MUSTARRD"
+
+
+def build_unprobed_episode_release(series, year, season, episode):
+    """Build a conservative recent-feed episode title without probing media."""
+    base = _dot(clean_series_name(series, year))
+    base += f".S{int(season):02d}E{int(episode):02d}"
+    return f"{base}.WEB-DL-MUSTARRD"
