@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 
@@ -92,9 +93,30 @@ def audio_label(audio):
     return f"{label}{suffix}" if suffix else label
 
 
+def _resolve_ffprobe(settings):
+    """Resolve ffprobe across Dispatcharr image layouts.
+
+    A configured absolute path is preferred only when it exists and is
+    executable. Otherwise fall back to PATH so images that install ffprobe in
+    /usr/local/bin (or another standard PATH location) continue to work even if
+    an older saved/default setting points at /usr/bin/ffprobe.
+    """
+    configured = str(settings.get("ffprobe_path") or "").strip()
+
+    if configured:
+        if os.path.sep in configured:
+            if os.path.isfile(configured) and os.access(configured, os.X_OK):
+                return configured
+        else:
+            resolved = shutil.which(configured)
+            if resolved:
+                return resolved
+
+    return shutil.which("ffprobe")
+
+
 def probe_media(url, settings):
-    executable = str(settings.get("ffprobe_path") or "ffprobe")
-    resolved = shutil.which(executable) or (executable if "/" in executable else None)
+    resolved = _resolve_ffprobe(settings)
     if not resolved:
         return {"status": "error", "error": "ffprobe not found"}
     timeout = max(1, int(settings.get("probe_timeout") or 20))
