@@ -20,7 +20,14 @@ from servarr_bridge.config import (
 )
 from servarr_bridge.descriptors import decode_descriptor, descriptor_nzb, encode_descriptor, extract_descriptor_from_nzb
 from servarr_bridge.probe import _resolve_ffprobe, classify_dynamic_range
-from servarr_bridge.releases import build_episode_release, build_movie_release, clean_series_name
+from servarr_bridge.recent import _episode_result, _movie_result
+from servarr_bridge.releases import (
+    build_episode_release,
+    build_movie_release,
+    build_unprobed_episode_release,
+    build_unprobed_movie_release,
+    clean_series_name,
+)
 
 
 class ConfigTests(unittest.TestCase):
@@ -98,6 +105,59 @@ class ProbeRuntimeTests(unittest.TestCase):
 
         self.assertEqual(resolved, "/usr/local/bin/ffprobe")
         which.assert_called_once_with("ffprobe")
+
+
+class RecentFeedTests(unittest.TestCase):
+    def test_unprobed_release_names_do_not_invent_media_traits(self):
+        self.assertEqual(
+            build_unprobed_movie_release("Example Movie", 2026),
+            "Example.Movie.2026.WEB-DL-MUSTARRD",
+        )
+        self.assertEqual(
+            build_unprobed_episode_release("EN - Example Show (2020) (US)", 2020, 3, 7),
+            "Example.Show.S03E07.WEB-DL-MUSTARRD",
+        )
+
+    def test_lightweight_movie_result_is_downloadable_parent_movie_category(self):
+        result = _movie_result(
+            7,
+            "12345",
+            "mkv",
+            "Example Movie",
+            2026,
+            "999",
+            1786741200,
+            "secret",
+        )
+        payload = decode_descriptor(result["token"], "secret")
+        self.assertEqual(result["category"], "2000")
+        self.assertEqual(payload["kind"], "movie")
+        self.assertEqual(payload["media_id"], "12345")
+        self.assertEqual(payload["dispatcharr_account_id"], 7)
+
+    def test_lightweight_episode_result_is_downloadable_parent_tv_category(self):
+        result = _episode_result(
+            7,
+            "series-22",
+            "episode-44",
+            "mkv",
+            "Example Show",
+            2020,
+            3,
+            7,
+            "888",
+            "Episode Seven",
+            1786741200,
+            "secret",
+            duration_seconds=3600,
+        )
+        payload = decode_descriptor(result["token"], "secret")
+        self.assertEqual(result["category"], "5000")
+        self.assertEqual(payload["kind"], "episode")
+        self.assertEqual(payload["media_id"], "episode-44")
+        self.assertEqual(payload["season"], 3)
+        self.assertEqual(payload["episode"], 7)
+        self.assertEqual(payload["duration_minutes"], 60)
 
 
 class PluginRuntimeTests(unittest.TestCase):
