@@ -1,5 +1,6 @@
 import os
 import re
+import secrets
 from pathlib import Path
 
 
@@ -27,11 +28,45 @@ DEFAULTS = {
 }
 
 
+def _new_api_key():
+    """Return a cryptographically strong URL-safe API key."""
+    return secrets.token_urlsafe(32)
+
+
+def _settings_with_api_key(cfg):
+    """Return persisted plugin settings, generating an API key only if blank.
+
+    The initial read avoids taking a row lock on every service request. If the
+    key is blank, re-read under SELECT ... FOR UPDATE so concurrent plugin
+    loaders or requests cannot race and persist different keys.
+    """
+    current = dict(cfg.settings or {})
+    if str(current.get("api_key") or "").strip():
+        return current
+
+    from django.db import transaction
+    from apps.plugins.models import PluginConfig
+
+    with transaction.atomic():
+        locked = PluginConfig.objects.select_for_update().get(pk=cfg.pk)
+        current = dict(locked.settings or {})
+        if str(current.get("api_key") or "").strip():
+            return current
+
+        current["api_key"] = _new_api_key()
+        locked.settings = current
+        locked.save(update_fields=["settings", "updated_at"])
+        return current
+
+
 def get_settings():
     from apps.plugins.models import PluginConfig
+
     cfg = PluginConfig.objects.get(key=PLUGIN_KEY)
+    persisted = _settings_with_api_key(cfg)
+
     values = dict(DEFAULTS)
-    values.update(cfg.settings or {})
+    values.update(persisted)
     # v0.1.0 used the PATH-dependent literal "ffprobe" as its default. Treat
     # that exact legacy value (and blank values) as the old default so existing
     # installations automatically use Dispatcharr's system ffprobe location.
