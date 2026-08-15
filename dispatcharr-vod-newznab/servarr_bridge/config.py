@@ -20,7 +20,7 @@ DEFAULTS = {
     "servarr_completed_dir": "/completed",
     "sonarr_category": "sonarr",
     "radarr_category": "radarr",
-    "ffprobe_path": "ffprobe",
+    "ffprobe_path": "/usr/bin/ffprobe",
     "probe_timeout": 20,
     "catalog_cache_seconds": 300,
     "max_variants": 20,
