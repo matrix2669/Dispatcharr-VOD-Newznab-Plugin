@@ -20,7 +20,7 @@ DEFAULTS = {
     "servarr_completed_dir": "/completed",
     "sonarr_category": "sonarr",
     "radarr_category": "radarr",
-    "ffprobe_path": "/usr/bin/ffprobe",
+    "ffprobe_path": "ffprobe",
     "probe_timeout": 20,
     "catalog_cache_seconds": 300,
     "max_variants": 20,
@@ -34,12 +34,7 @@ def _new_api_key():
 
 
 def _settings_with_api_key(cfg):
-    """Return persisted plugin settings, generating an API key only if blank.
-
-    The initial read avoids taking a row lock on every service request. If the
-    key is blank, re-read under SELECT ... FOR UPDATE so concurrent plugin
-    loaders or requests cannot race and persist different keys.
-    """
+    """Return persisted plugin settings, generating an API key only if blank."""
     current = dict(cfg.settings or {})
     if str(current.get("api_key") or "").strip():
         return current
@@ -67,10 +62,7 @@ def get_settings():
 
     values = dict(DEFAULTS)
     values.update(persisted)
-    # v0.1.0 used the PATH-dependent literal "ffprobe" as its default. Treat
-    # that exact legacy value (and blank values) as the old default so existing
-    # installations automatically use Dispatcharr's system ffprobe location.
-    if str(values.get("ffprobe_path") or "").strip() in {"", "ffprobe"}:
+    if not str(values.get("ffprobe_path") or "").strip():
         values["ffprobe_path"] = DEFAULTS["ffprobe_path"]
     return values
 
@@ -104,18 +96,10 @@ def extension_token(value):
 
 
 def sab_category_dir(category):
-    """Relative completed-dir root exposed by the emulated SAB category."""
     return f"mustarrd/{sanitize_component(category, fallback='default')}"
 
 
 def sab_output_path(category, release, extension):
-    """Return SAB-style job/file layout for a Servarr grab.
-
-    A real SAB category has its own completed directory and job folders enabled.
-    Mirror that layout so Servarr sees:
-
-      mustarrd/<category>/<release>/<release>.<ext>
-    """
     category_dir = sab_category_dir(category)
     release_name = release_token(release)
     ext = extension_token(extension)
@@ -123,16 +107,6 @@ def sab_output_path(category, release, extension):
 
 
 def infer_sab_state_from_output_path(output_path):
-    """Recover SAB metadata from a Mustarrd output path.
-
-    External Servarr jobs always use:
-
-      .../mustarrd/<category>/<release>/<release>.<ext>
-
-    This makes queue/history self-healing if the small bridge state file is
-    missing or was created by an older plugin version. Ordinary Mustarrd DVR
-    recordings do not contain the ``mustarrd`` path component and are ignored.
-    """
     text = str(output_path or "").strip().replace("\\", "/")
     if not text:
         return {}
