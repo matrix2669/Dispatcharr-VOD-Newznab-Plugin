@@ -1,5 +1,6 @@
 import importlib
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from servarr_bridge.config import (
     DEFAULTS,
+    _new_api_key,
     infer_sab_state_from_output_path,
     sab_category_dir,
     sab_output_path,
@@ -27,6 +29,13 @@ class ConfigTests(unittest.TestCase):
 
     def test_dispatcharr_proxy_requires_explicit_url(self):
         self.assertEqual(DEFAULTS["dispatcharr_url"], "")
+
+    def test_api_key_generator_is_url_safe_and_non_repeating(self):
+        first = _new_api_key()
+        second = _new_api_key()
+        self.assertNotEqual(first, second)
+        self.assertGreaterEqual(len(first), 40)
+        self.assertRegex(first, re.compile(r"^[A-Za-z0-9_-]+$"))
 
     def test_sab_category_directory(self):
         self.assertEqual(sab_category_dir("radarr"), "mustarrd/radarr")
