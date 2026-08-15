@@ -1,6 +1,10 @@
+import importlib
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -56,6 +60,55 @@ class ConfigTests(unittest.TestCase):
             ),
             {},
         )
+
+
+class PluginRuntimeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._state_dir = tempfile.TemporaryDirectory()
+        cls._env = patch.dict(
+            os.environ,
+            {"DISPATCHARR_VOD_NEWZNAB_STATE_DIR": cls._state_dir.name},
+        )
+        cls._env.start()
+        cls.plugin_module = importlib.import_module("plugin")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._env.stop()
+        cls._state_dir.cleanup()
+
+    def test_dispatcharr_app_root_is_discovered_from_runtime_sys_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_root = Path(tmp)
+            package = app_root / "dispatcharr"
+            package.mkdir()
+            (package / "settings.py").write_text("# synthetic Dispatcharr settings\n")
+
+            runtime_path = [str(app_root), *sys.path]
+            with patch.object(sys, "path", runtime_path):
+                roots = self.plugin_module._dispatcharr_app_roots()
+                child_path = self.plugin_module.Plugin.__new__(
+                    self.plugin_module.Plugin
+                )._child_pythonpath().split(os.pathsep)
+
+            self.assertIn(app_root.resolve(), roots)
+            self.assertIn(str(app_root.resolve()), child_path)
+
+    def test_service_start_failure_keeps_plugin_loaded_for_diagnostics(self):
+        with patch.dict(
+            os.environ,
+            {"DISPATCHARR_VOD_NEWZNAB_SERVICE": ""},
+            clear=False,
+        ):
+            with patch.object(
+                self.plugin_module.Plugin,
+                "_ensure_service",
+                side_effect=RuntimeError("synthetic startup failure"),
+            ):
+                instance = self.plugin_module.Plugin()
+
+        self.assertIsInstance(instance, self.plugin_module.Plugin)
 
 
 class DescriptorTests(unittest.TestCase):
