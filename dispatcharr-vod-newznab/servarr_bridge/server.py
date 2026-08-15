@@ -12,7 +12,7 @@ from django.db import close_old_connections
 
 from .config import PLUGIN_DIR, get_settings, normalized_api_key
 from .newznab import caps_xml, grab_nzb, rss_xml, search_movies, search_tv
-from .recent import recent_tv_results
+from .recent import recent_movie_results, recent_tv_results
 from . import sab
 
 
@@ -33,20 +33,10 @@ def _int(value, default=0):
 
 
 def _installed_plugin_version():
-    """Read the version currently installed on disk.
-
-    Dispatcharr replaces the whole plugin directory during managed upgrades.
-    The detached bridge process can therefore keep running old imported code
-    even though the files at PLUGIN_DIR now belong to a newer release. Reading
-    plugin.json through the stable install path lets the child detect that swap
-    without relying on Dispatcharr to re-import plugin.py first.
-    """
     try:
         payload = json.loads((PLUGIN_DIR / "plugin.json").read_text())
         return str(payload.get("version") or "").strip()
     except Exception:
-        # Atomic plugin replacement has a short window where the path may be
-        # absent. Treat that as transient instead of stopping the service.
         return ""
 
 
@@ -108,15 +98,16 @@ class Handler(BaseHTTPRequestHandler):
         if mode == "caps":
             return self._send(200, caps_xml(), "application/xml")
         if mode == "movie":
-            results = search_movies(_one(params, "tmdbid"), _one(params, "q"), settings)
+            tmdbid = _one(params, "tmdbid")
+            query = _one(params, "q")
+            if not str(tmdbid or "").strip() and not str(query or "").strip():
+                results = recent_movie_results(settings)
+            else:
+                results = search_movies(tmdbid, query, settings)
         elif mode == "tvsearch":
             season_raw = _one(params, "season")
             ep_raw = _one(params, "ep")
             if season_raw in {None, ""}:
-                # Sonarr uses an unqualified tvsearch request for indexer
-                # validation and RSS/recent polling. Return a small set of real
-                # raw-provider VOD episodes so both workflows receive meaningful
-                # results in the advertised TV categories.
                 results = recent_tv_results(settings)
             else:
                 results = search_tv(
@@ -293,10 +284,6 @@ def run_server():
                 service_script,
             )
 
-            # Dispatcharr replaces plugin directories atomically. The running
-            # process can therefore retain a deleted cwd from the old release.
-            # Move to the newly-installed plugin directory before exec, with a
-            # stable application/root fallback if the swap is still in flight.
             try:
                 os.chdir(str(PLUGIN_DIR))
             except OSError:
