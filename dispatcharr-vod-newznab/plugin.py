@@ -69,8 +69,6 @@ def _dispatcharr_app_roots():
         if entry:
             candidates.append(Path(entry))
 
-    # Compatibility fallbacks for known Dispatcharr layouts. They are only
-    # accepted when the expected settings module actually exists there.
     candidates.extend((Path("/app"), Path("/opt/dispatcharr")))
 
     roots = []
@@ -108,11 +106,11 @@ def _dedupe_path_entries(entries):
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.15"
+    version = "0.1.16"
     description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
-    fields = []  # plugin.json is authoritative
+    fields = []
     actions = []
 
     def __init__(self):
@@ -121,9 +119,6 @@ class Plugin:
         try:
             self._ensure_service()
         except Exception:
-            # Keep the plugin itself loaded so Status/Restart remain available
-            # and Dispatcharr does not misrepresent a child-service failure as
-            # missing plugin files.
             log.exception(
                 "Detached Newznab/SAB service failed to start; plugin remains loaded for diagnostics"
             )
