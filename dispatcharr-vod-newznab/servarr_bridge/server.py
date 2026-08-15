@@ -292,6 +292,20 @@ def run_server():
                 installed,
                 service_script,
             )
+
+            # Dispatcharr replaces plugin directories atomically. The running
+            # process can therefore retain a deleted cwd from the old release.
+            # Move to the newly-installed plugin directory before exec, with a
+            # stable application/root fallback if the swap is still in flight.
+            try:
+                os.chdir(str(PLUGIN_DIR))
+            except OSError:
+                fallback = str(env.get("DISPATCHARR_APP_ROOT") or "").strip()
+                try:
+                    os.chdir(fallback if fallback and os.path.isdir(fallback) else "/")
+                except OSError:
+                    os.chdir("/")
+
             os.execve(
                 sys.executable,
                 [sys.executable, str(service_script)],
