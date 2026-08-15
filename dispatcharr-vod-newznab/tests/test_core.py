@@ -19,7 +19,7 @@ from servarr_bridge.config import (
     sab_output_path,
 )
 from servarr_bridge.descriptors import decode_descriptor, descriptor_nzb, encode_descriptor, extract_descriptor_from_nzb
-from servarr_bridge.probe import classify_dynamic_range
+from servarr_bridge.probe import _resolve_ffprobe, classify_dynamic_range
 from servarr_bridge.releases import build_episode_release, build_movie_release, clean_series_name
 
 
@@ -69,6 +69,35 @@ class ConfigTests(unittest.TestCase):
             ),
             {},
         )
+
+
+class ProbeRuntimeTests(unittest.TestCase):
+    def test_missing_absolute_ffprobe_falls_back_to_path(self):
+        with patch("servarr_bridge.probe.os.path.isfile", return_value=False), patch(
+            "servarr_bridge.probe.shutil.which", return_value="/usr/local/bin/ffprobe"
+        ) as which:
+            resolved = _resolve_ffprobe({"ffprobe_path": "/usr/bin/ffprobe"})
+
+        self.assertEqual(resolved, "/usr/local/bin/ffprobe")
+        which.assert_called_with("ffprobe")
+
+    def test_existing_absolute_ffprobe_is_preferred(self):
+        with patch("servarr_bridge.probe.os.path.isfile", return_value=True), patch(
+            "servarr_bridge.probe.os.access", return_value=True
+        ), patch("servarr_bridge.probe.shutil.which") as which:
+            resolved = _resolve_ffprobe({"ffprobe_path": "/custom/bin/ffprobe"})
+
+        self.assertEqual(resolved, "/custom/bin/ffprobe")
+        which.assert_not_called()
+
+    def test_named_ffprobe_resolves_from_path(self):
+        with patch(
+            "servarr_bridge.probe.shutil.which", return_value="/usr/local/bin/ffprobe"
+        ) as which:
+            resolved = _resolve_ffprobe({"ffprobe_path": "ffprobe"})
+
+        self.assertEqual(resolved, "/usr/local/bin/ffprobe")
+        which.assert_called_once_with("ffprobe")
 
 
 class PluginRuntimeTests(unittest.TestCase):
