@@ -329,3 +329,160 @@ Servarr validates indexers frequently. Expensive operations during validation ca
 ## Consequences
 
 The implementation must maintain separate lightweight and full-resolution workflows.
+
+---
+
+# ADR-012: Lightweight Servarr Feeds
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+Servarr feed requests (RSS, recent releases, and validation-related requests) must use lightweight processing paths and must not trigger full provider searches or media enrichment.
+
+## Reason
+
+Sonarr and Radarr poll indexers frequently. Performing full provider searches, metadata enrichment, or media probing during these requests creates unnecessary load and can cause slow or failed indexer validation.
+
+## Alternatives Considered
+
+- Use the same full search workflow for RSS, validation, and interactive searches.
+- Probe all available media before returning feed results.
+
+## Consequences
+
+The plugin maintains separate workflows:
+
+- lightweight paths for validation and feeds;
+- full enrichment paths for interactive searches.
+
+Feed results must rely on cached data and existing Dispatcharr relationships whenever possible.
+
+---
+
+# ADR-013: Dynamic ffprobe Resolution
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin must dynamically locate and invoke ffprobe rather than assuming a fixed installation path.
+
+## Reason
+
+Dispatcharr deployments may run in different environments including containers with different filesystem layouts. Hardcoded paths such as `/usr/bin/ffprobe` reduce compatibility.
+
+## Alternatives Considered
+
+- Hardcode a known ffprobe path.
+- Require administrators to manually configure paths for every deployment.
+
+## Consequences
+
+The plugin should:
+
+- detect available ffprobe locations;
+- respect configured overrides;
+- fail clearly when probing is required but unavailable.
+
+Media probing remains limited to workflows where codec, HDR, resolution, or audio metadata is required.
+
+---
+
+# ADR-014: Release History and Documentation Boundaries
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+Release documentation, architecture documentation, and AI/developer guidance must remain separate concerns.
+
+## Reason
+
+The project contains three different types of documentation:
+
+- CHANGELOG.md describes user-visible releases.
+- DECISIONS.md describes architectural reasoning.
+- AGENT.md describes development guidance and operational expectations.
+
+Mixing these responsibilities makes future maintenance and historical review more difficult.
+
+## Alternatives Considered
+
+- Store all project history in CHANGELOG.md.
+- Put architectural decisions only in commit messages.
+
+## Consequences
+
+Future changes must update the appropriate documentation file:
+
+- new feature/fix release → CHANGELOG.md;
+- architectural decision → DECISIONS.md;
+- workflow or AI/developer behavior change → AGENT.md.
+
+---
+
+# ADR-015: Servarr Release Generation Boundary
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin generates Servarr-compatible releases while keeping provider-specific implementation details hidden behind Dispatcharr.
+
+## Reason
+
+Sonarr and Radarr require release metadata, categories, and download targets, but provider selection and stream resolution belong to Dispatcharr.
+
+The plugin acts as the compatibility layer between Servarr applications and Dispatcharr VOD.
+
+## Alternatives Considered
+
+- Expose provider URLs directly to Sonarr/Radarr.
+- Allow Mustarrd to resolve provider-specific streams.
+- Implement a custom Servarr download client.
+
+## Consequences
+
+The plugin is responsible for:
+
+- Newznab responses;
+- synthetic release metadata;
+- SAB-compatible handoff.
+
+Dispatcharr remains responsible for:
+
+- provider selection;
+- stream resolution;
+- VOD proxy handling.
+
+Mustarrd remains responsible for:
+
+- downloading;
+- retries;
+- queue management;
+- completion processing.
