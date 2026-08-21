@@ -6,15 +6,20 @@ This repository contains the Dispatcharr VOD Newznab plugin.
 
 The plugin exposes Dispatcharr VOD content to Sonarr and Radarr through a Newznab-compatible API and SABnzbd-compatible download interface while keeping Dispatcharr as the source of truth and Mustarrd as the download engine.
 
+This project follows the AI project standards defined in the matrix2669/workspace repository.
+
+Review `DECISIONS.md` before making architectural changes.
+
 ## AI Agent Instructions
 
 Before modifying code:
 
 1. Read this file completely.
-2. Understand the complete request flow before changing implementation.
-3. Preserve existing architecture unless intentionally changing design.
-4. Do not optimize one component while breaking Sonarr/Radarr compatibility.
-5. Test both Sonarr and Radarr workflows after changes.
+2. Review `DECISIONS.md` for architectural context.
+3. Understand the complete request flow before changing implementation.
+4. Preserve existing architecture unless intentionally changing design.
+5. Do not optimize one component while breaking Sonarr/Radarr compatibility.
+6. Test both Sonarr and Radarr workflows after changes.
 
 ## Non-Negotiable Architecture Rules
 
@@ -149,5 +154,7 @@ README.md is for users.
 CHANGELOG.md is for release history.
 
 AGENT.md is for architecture and future AI/developer guidance.
+
+DECISIONS.md documents why architectural choices were made.
 
 Update this file only when architecture, workflow, or development rules change.
