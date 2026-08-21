@@ -185,3 +185,147 @@ The plugin depends on contracts owned by other repositories. A local change can 
 ## Consequences
 
 Future architectural changes require cross-project review.
+
+---
+
+# ADR-007: SABnzbd Compatibility Layer Is the Servarr Integration Boundary
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin exposes a SABnzbd-compatible interface to Sonarr and Radarr instead of implementing a custom Servarr download client integration.
+
+## Reason
+
+Sonarr and Radarr already have mature SABnzbd support. Using this compatibility layer allows Servarr applications to treat Mustarrd as a download backend while the plugin handles Dispatcharr-specific resolution.
+
+## Alternatives Considered
+
+- Create a custom Sonarr/Radarr download client.
+- Have Sonarr/Radarr communicate directly with Mustarrd.
+
+## Consequences
+
+The plugin must preserve SAB-compatible responses and queue behavior.
+
+---
+
+# ADR-008: Detached Newznab/SAB Service Runs Separately From Plugin Discovery
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin starts and manages a detached Newznab/SAB-compatible service rather than serving all requests directly inside the Dispatcharr plugin lifecycle.
+
+## Reason
+
+Servarr applications require a persistent HTTP endpoint. Separating the service improves reliability and isolates external API traffic from plugin loading.
+
+## Alternatives Considered
+
+- Run the HTTP server directly in the plugin loader process.
+- Create a separate standalone container.
+
+## Consequences
+
+The plugin must manage service startup, health checks, and failure reporting.
+
+---
+
+# ADR-009: Synthetic Releases Must Preserve Servarr Expectations Without Exposing Provider Details
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin generates Servarr-compatible releases representing Dispatcharr VOD availability while hiding provider implementation details.
+
+## Reason
+
+Sonarr and Radarr require release metadata and download targets, but the actual source selection belongs to Dispatcharr.
+
+## Alternatives Considered
+
+- Return direct provider URLs.
+- Expose provider-specific release information.
+
+## Consequences
+
+Release metadata must accurately represent available media while keeping provider handling inside Dispatcharr.
+
+---
+
+# ADR-010: API Keys Are Managed Through Plugin Settings Lifecycle
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The API key is generated automatically when missing and remains stable unless intentionally reset.
+
+## Reason
+
+Sonarr/Radarr require a stable indexer credential. Accidental regeneration would break existing configurations.
+
+## Alternatives Considered
+
+- Add a separate rotate button.
+- Generate a new key every save.
+
+## Consequences
+
+Key rotation is an intentional administrative action.
+
+---
+
+# ADR-011: Servarr Validation and Real Searches Follow Different Performance Paths
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+Validation requests prioritize speed and availability checks, while actual searches may perform deeper enrichment.
+
+## Reason
+
+Servarr validates indexers frequently. Expensive operations during validation caused poor user experience.
+
+## Alternatives Considered
+
+- Use identical processing for validation and searches.
+
+## Consequences
+
+The implementation must maintain separate lightweight and full-resolution workflows.
