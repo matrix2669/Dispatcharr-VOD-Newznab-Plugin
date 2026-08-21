@@ -17,6 +17,36 @@ The format follows Keep a Changelog principles where practical.
 
 - Improved documentation separation between user guidance, agent instructions, architectural decisions, and release history.
 
+## [0.1.16]
+
+### Added
+
+- Added lightweight Servarr recent-feed handling.
+- Added improved Servarr release naming behavior.
+
+### Changed
+
+- Improved Sonarr/Radarr validation performance.
+- Reduced unnecessary metadata probing during validation.
+- Improved ffprobe discovery across Dispatcharr runtime layouts.
+
+### Fixed
+
+- Fixed ffprobe path assumptions across different Dispatcharr container layouts.
+- Fixed validation workflows performing expensive operations unnecessarily.
+
+## [0.1.15]
+
+### Added
+
+- Added lightweight recent-feed support for Servarr workflows.
+
+### Changed
+
+- Optimized indexer validation paths.
+- Improved compatibility with different ffprobe installation layouts.
+- Improved Servarr feed performance.
+
 ## [0.1.14]
 
 ### Added
