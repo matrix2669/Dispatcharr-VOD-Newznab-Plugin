@@ -27,16 +27,16 @@ All VOD downloads must resolve through Dispatcharr's native VOD proxy. The plugi
 
 ## Reason
 
-Dispatcharr must remain responsible for provider selection, stream tracking, account usage, and VOD connection management. Bypassing Dispatcharr would remove visibility and control over the selected stream.
+Dispatcharr must remain responsible for provider selection, stream tracking, account usage, and VOD connection management.
 
 ## Alternatives Considered
 
-- Expose the original Xtream provider URL directly.
+- Expose original provider URLs directly.
 - Let Mustarrd download directly from providers.
 
 ## Consequences
 
-The plugin must materialize missing Dispatcharr relations when needed and generate Dispatcharr-native proxy URLs for downloads.
+The plugin must maintain Dispatcharr-native stream resolution.
 
 ---
 
@@ -52,20 +52,20 @@ Accepted
 
 ## Decision
 
-The plugin translates Servarr requests and submits jobs, but Mustarrd performs the actual download, retry, queue, and completion lifecycle.
+The plugin translates Servarr requests and submits jobs, but Mustarrd performs downloading, retries, queue management, and completion handling.
 
 ## Reason
 
-Mustarrd already provides the required download management behavior. Reimplementing downloading inside the plugin would duplicate functionality and create competing workflows.
+Download lifecycle behavior belongs in the dedicated download service.
 
 ## Alternatives Considered
 
-- Implement downloading directly inside the Dispatcharr plugin.
-- Stream directly from providers using the SAB compatibility layer.
+- Implement downloading inside the plugin.
+- Stream directly using SAB compatibility.
 
 ## Consequences
 
-The plugin must maintain compatibility with Mustarrd APIs and translate between SAB semantics and Mustarrd jobs.
+The plugin must maintain compatibility with Mustarrd APIs.
 
 ---
 
@@ -85,16 +85,16 @@ Indexer validation and RSS-style requests must avoid expensive provider operatio
 
 ## Reason
 
-Servarr performs validation and RSS requests frequently. Performing full stream analysis caused multi-minute validation times.
+Servarr performs validation frequently. Full metadata processing caused multi-minute validation times.
 
 ## Alternatives Considered
 
-- Run complete searches for validation requests.
-- Probe every available stream before returning results.
+- Run full searches during validation.
+- Probe every available stream.
 
 ## Consequences
 
-Validation uses local Dispatcharr relations and cached catalog data. Full enrichment is reserved for real user searches.
+Validation uses local relations and cached data. Full enrichment is reserved for actual searches.
 
 ---
 
@@ -110,20 +110,20 @@ Accepted
 
 ## Decision
 
-ffprobe is used for real searches where codec, HDR, Dolby Vision, resolution, and audio metadata improve release naming. It is not used for validation feeds.
+ffprobe is used for searches requiring accurate codec, HDR, resolution, and audio metadata. It is not used for validation feeds.
 
 ## Reason
 
-Media probing is expensive and unnecessary when Servarr only needs confirmation that the indexer is functional.
+Media probing is expensive and unnecessary for indexer health checks.
 
 ## Alternatives Considered
 
-- Probe every Newznab result.
+- Probe every result.
 - Return fabricated quality metadata.
 
 ## Consequences
 
-Searches provide accurate release metadata while validation remains fast.
+Searches remain accurate while validation remains fast.
 
 ---
 
@@ -143,12 +143,45 @@ The plugin must not assume a fixed Dispatcharr installation path.
 
 ## Reason
 
-Dispatcharr deployments may run from different container layouts, including `/app` and `/opt/dispatcharr`.
+Dispatcharr deployments may use different container layouts.
 
 ## Alternatives Considered
 
-- Hard-code a single application path.
+- Hard-code `/opt/dispatcharr`.
 
 ## Consequences
 
 Runtime paths must be detected dynamically.
+
+---
+
+# ADR-006: Related Project Contracts Must Be Reviewed Before Integration Changes
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+Changes affecting Dispatcharr or Mustarrd integration must be reviewed against the related project's behavior before implementation.
+
+## Reason
+
+The plugin depends on contracts owned by other repositories. A local change can unintentionally break another component.
+
+## Related Projects
+
+- Dispatcharr: plugin framework, VOD providers, VOD proxy.
+- Mustarrd: queue, downloading, retries, completion lifecycle.
+
+## Alternatives Considered
+
+- Treat the plugin repository as standalone.
+
+## Consequences
+
+Future architectural changes require cross-project review.
