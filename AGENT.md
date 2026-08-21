@@ -4,7 +4,7 @@
 
 This repository contains the Dispatcharr VOD Newznab plugin.
 
-The plugin exposes Dispatcharr VOD content to Sonarr and Radarr through a Newznab-compatible API and SABnzbd-compatible download interface while keeping Dispatcharr as the source of truth and Mustarrd as the download engine.
+The plugin exposes Dispatcharr VOD content to Sonarr and Radarr through Newznab-compatible and SABnzbd-compatible APIs. It is the intermediary between Servarr applications and Mustarrd while keeping Dispatcharr as the source of VOD data and Mustarrd as the download engine.
 
 This project follows the AI project standards defined in the matrix2669/workspace repository.
 
@@ -12,14 +12,19 @@ Review `DECISIONS.md` before making architectural changes.
 
 ## Related Projects
 
-Changes to this repository require understanding related systems:
+Changes require understanding:
 
-- Dispatcharr: `Dispatcharr/Dispatcharr`
-  - Provides the plugin framework, VOD catalog, provider handling, and native VOD proxy behavior.
-- Mustarrd: `matrix2669/mustarrd`
-  - Provides download queueing, retries, processing, and completion lifecycle.
+- Dispatcharr (`Dispatcharr/Dispatcharr`)
+  - plugin framework
+  - VOD catalog
+  - provider handling
+  - VOD proxy behavior
 
-When modifying integration behavior, review related projects before making changes.
+- Mustarrd (`matrix2669/mustarrd`)
+  - download queue
+  - retries
+  - processing
+  - completion lifecycle
 
 ## Architecture Rules
 
@@ -27,73 +32,133 @@ When modifying integration behavior, review related projects before making chang
 
 The plugin must not bypass Dispatcharr VOD handling.
 
-Downloads must resolve through the Dispatcharr VOD proxy so provider accounting, stream selection, and profiles remain controlled by Dispatcharr.
+Dispatcharr owns:
 
-### Mustarrd performs downloads
+- VOD availability
+- provider selection
+- stream resolution
+- account/provider behavior
 
-The plugin translates Servarr requests and submits jobs.
+### This plugin is the Servarr intermediary
 
-Plugin responsibilities:
+The plugin owns:
 
 - Newznab API
-- SAB compatibility
+- SABnzbd-compatible API
 - Servarr release generation
-- Dispatcharr VOD resolution
+- Dispatcharr VOD lookup
 - Dispatcharr proxy integration
 
-Mustarrd responsibilities:
+Mustarrd owns:
 
 - downloading
 - retries
 - queue management
 - completion handling
+- final download lifecycle
 
-## Request Path Rules
+Do not move Servarr-specific behavior into Mustarrd.
+
+## Servarr Workflow Rules
+
+### Current workflow
+
+The primary supported workflow is interactive search in Sonarr/Radarr.
+
+Interactive searches may perform:
+
+- Dispatcharr VOD lookups
+- metadata matching
+- ffprobe analysis
+- quality determination
 
 ### Validation and RSS
 
-Sonarr/Radarr validation, RSS, and feed requests must remain lightweight.
+Validation, RSS, and feed requests must remain lightweight.
 
-Do not add:
+Do not perform:
 
-- ffprobe operations;
-- large provider scans;
-- unnecessary metadata lookups.
+- large provider scans
+- unnecessary metadata enrichment
+- ffprobe probing unless required
 
-Use cached or local Dispatcharr relations where possible.
+Future RSS support should use background-generated cached data rather than live expensive searches.
 
-### Real Searches
+## Future Roadmap Considerations
 
-Interactive searches may perform deeper processing:
+Potential future improvements:
 
-- provider lookups;
-- metadata enrichment;
-- ffprobe probing.
+- background idle-time VOD scanning
+- cache probed stream metadata
+- generate RSS feeds from cached data
+- investigate season pack support when Dispatcharr data supports it
+- return SAB-compatible errors when Mustarrd is unavailable
 
-Expensive operations should only be used when they improve returned media accuracy.
+## Media Metadata
+
+Dispatcharr is authoritative for VOD availability.
+
+TMDB and IMDb identifiers are used for Sonarr/Radarr matching. After download completion, Sonarr/Radarr own metadata processing and library organization.
+
+The plugin does not manage Plex/Jellyfin libraries.
 
 ## Media Probing
 
 ffprobe must be resolved dynamically.
 
-Do not assume fixed paths such as `/usr/bin/ffprobe` because Dispatcharr deployments may use different container layouts.
+Do not assume fixed paths such as `/usr/bin/ffprobe`.
 
 Probe only when codec, HDR, resolution, or audio metadata is required.
 
-## Detached Servarr Service
+Probed stream data should be cached. Cache entries should be validated when VOD data refreshes and removed when the source item no longer exists.
 
-The detached Newznab/SAB-compatible service must:
+A long cache lifetime is acceptable because VOD metadata changes primarily by availability.
 
-- start reliably;
-- expose health status;
-- report failures clearly;
-- avoid duplicate service instances.
+## Download/File Handling
 
-Operational deployments use a dedicated service endpoint and health checks.
+The plugin follows SABnzbd behavior.
+
+The plugin:
+
+- creates Servarr-compatible releases
+- determines categories/download handling
+- submits jobs through SAB-compatible APIs
+
+Mustarrd:
+
+- handles incomplete downloads
+- moves completed files
+- manages retries
+
+After completion, Sonarr/Radarr take ownership of renaming and library management.
+
+## Authentication
+
+Authentication should follow existing Newznab and SABnzbd API conventions.
+
+Do not introduce custom authentication models without an architectural decision.
+
+## Deployment
+
+The Newznab/SAB service lifecycle is tied to the Dispatcharr plugin.
+
+When the plugin is enabled:
+
+- service should run
+- health checks should be available
+- failures should be reported clearly
+
+Avoid duplicate service instances.
+
+## Multi Instance Support
+
+Multiple Dispatcharr instances are not currently supported or planned.
+
+Each plugin instance is tied to its Dispatcharr VOD catalog and accounts.
 
 ## Development Workflow
 
-Use the standard workspace workflow:
+Use:
 
 ```
 main
@@ -105,28 +170,29 @@ main
  +-- dev
 ```
 
-Changes should be tested before moving into production branches.
+Changes should be tested before promotion.
 
 ## Testing Requirements
 
 Before release validate:
 
-- plugin installation;
-- plugin loading;
-- service health;
-- Sonarr indexer validation;
-- Sonarr search and grab;
-- Radarr indexer validation;
-- Radarr search and grab;
-- Mustarrd queue and completion.
+- plugin installation
+- plugin loading
+- service health
+- Sonarr validation
+- Sonarr search/grab
+- Radarr validation
+- Radarr search/grab
+- Mustarrd queue behavior
+- Mustarrd completion behavior
 
 ## Known Pitfalls
 
-- Do not assume fixed ffprobe locations.
+- Do not assume ffprobe locations.
 - Validation paths must remain fast.
 - Do not bypass Dispatcharr proxy URLs.
-- Do not move Servarr-specific behavior into Mustarrd.
-- Do not modify released versions; create a new release.
+- Do not replace Mustarrd download lifecycle without an architectural decision.
+- Do not add Plex/Jellyfin integration; Sonarr/Radarr own library management.
 
 ## Documentation Rules
 
@@ -137,5 +203,3 @@ CHANGELOG.md is for release history.
 AGENT.md is for architecture and future AI/developer guidance.
 
 DECISIONS.md documents why architectural choices were made.
-
-Update this file only when architecture, workflow, or development rules change.
