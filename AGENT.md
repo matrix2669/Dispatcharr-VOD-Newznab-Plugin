@@ -18,58 +18,41 @@ Changes to this repository require understanding related systems:
   - Provides the plugin framework, VOD catalog, provider handling, and native VOD proxy behavior.
 - Mustarrd: `matrix2669/mustarrd`
   - Provides download queueing, retries, processing, and completion lifecycle.
-- Dispatcharr-Mustarrd integration components may affect API contracts and workflow behavior.
 
 When modifying integration behavior, review related projects before making changes.
 
-## AI Agent Instructions
-
-Before modifying code:
-
-1. Read this file completely.
-2. Review `DECISIONS.md` for architectural context.
-3. Review related project behavior when integrations are affected.
-4. Understand the complete request flow before changing implementation.
-5. Preserve existing architecture unless intentionally changing design.
-6. Do not optimize one component while breaking Sonarr/Radarr compatibility.
-7. Test both Sonarr and Radarr workflows after changes.
-
-## Non-Negotiable Architecture Rules
+## Architecture Rules
 
 ### Dispatcharr is the source of truth
 
 The plugin must not bypass Dispatcharr VOD handling.
 
-Downloads must resolve through the Dispatcharr VOD proxy so that:
-
-- provider accounting remains correct;
-- stream selection remains controlled by Dispatcharr;
-- profiles/providers are respected.
+Downloads must resolve through the Dispatcharr VOD proxy so provider accounting, stream selection, and profiles remain controlled by Dispatcharr.
 
 ### Mustarrd performs downloads
 
-The plugin translates requests and submits jobs.
+The plugin translates Servarr requests and submits jobs.
 
-Responsibilities:
-
-Plugin:
+Plugin responsibilities:
 
 - Newznab API
 - SAB compatibility
-- stream resolution
+- Servarr release generation
+- Dispatcharr VOD resolution
 - Dispatcharr proxy integration
 
-Mustarrd:
+Mustarrd responsibilities:
 
 - downloading
 - retries
+- queue management
 - completion handling
 
 ## Request Path Rules
 
-### Sonarr/Radarr Validation and RSS
+### Validation and RSS
 
-Validation requests must be lightweight.
+Sonarr/Radarr validation, RSS, and feed requests must remain lightweight.
 
 Do not add:
 
@@ -81,47 +64,32 @@ Use cached or local Dispatcharr relations where possible.
 
 ### Real Searches
 
-Actual title/TMDB/episode searches may perform:
+Interactive searches may perform deeper processing:
 
 - provider lookups;
 - metadata enrichment;
 - ffprobe probing.
 
-Use expensive operations only when they improve returned media accuracy.
+Expensive operations should only be used when they improve returned media accuracy.
 
-## Dispatcharr Integration
+## Media Probing
 
-Never assume a fixed installation path.
+ffprobe must be resolved dynamically.
 
-Dispatcharr containers may run from locations such as:
+Do not assume fixed paths such as `/usr/bin/ffprobe` because Dispatcharr deployments may use different container layouts.
 
-- `/app`
-- `/opt/dispatcharr`
+Probe only when codec, HDR, resolution, or audio metadata is required.
 
-Detect paths dynamically.
+## Detached Servarr Service
 
-The detached Newznab/SAB service must:
+The detached Newznab/SAB-compatible service must:
 
 - start reliably;
 - expose health status;
-- log failures clearly.
+- report failures clearly;
+- avoid duplicate service instances.
 
-## Plugin Settings
-
-Important settings include:
-
-- Dispatcharr URL
-- Mustarrd URL
-- API key
-- ffprobe path
-- categories
-- cache settings
-
-API key behavior:
-
-- blank key generates a new key;
-- existing keys remain unchanged;
-- intentional rotation is done by clearing the key, saving, disabling, and re-enabling the plugin.
+Operational deployments use a dedicated service endpoint and health checks.
 
 ## Development Workflow
 
@@ -154,10 +122,10 @@ Before release validate:
 
 ## Known Pitfalls
 
-- "Missing plugin files" may actually indicate plugin initialization failure.
-- Do not assume `/usr/bin/ffprobe`; resolve ffprobe safely.
+- Do not assume fixed ffprobe locations.
 - Validation paths must remain fast.
 - Do not bypass Dispatcharr proxy URLs.
+- Do not move Servarr-specific behavior into Mustarrd.
 - Do not modify released versions; create a new release.
 
 ## Documentation Rules
