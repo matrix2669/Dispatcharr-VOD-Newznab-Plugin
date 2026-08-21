@@ -52,7 +52,7 @@ Accepted
 
 ## Decision
 
-The plugin translates Servarr requests and submits jobs, but Mustarrd performs downloading, retries, queue management, and completion handling.
+The plugin translates *arr Stack requests and submits jobs, but Mustarrd performs downloading, retries, queue management, and completion handling.
 
 ## Reason
 
@@ -85,7 +85,7 @@ Indexer validation and RSS-style requests must avoid expensive provider operatio
 
 ## Reason
 
-Servarr performs validation frequently. Full metadata processing caused multi-minute validation times.
+Sonarr/Radarr performs validation frequently. Full metadata processing caused multi-minute validation times.
 
 ## Alternatives Considered
 
@@ -188,7 +188,7 @@ Future architectural changes require cross-project review.
 
 ---
 
-# ADR-007: SABnzbd Compatibility Layer Is the Servarr Integration Boundary
+# ADR-007: SABnzbd Compatibility Layer Is the Sonarr/Radarr Integration Boundary
 
 ## Status
 
@@ -200,11 +200,11 @@ Accepted
 
 ## Decision
 
-The plugin exposes a SABnzbd-compatible interface to Sonarr and Radarr instead of implementing a custom Servarr download client integration.
+The plugin exposes a SABnzbd-compatible interface to Sonarr and Radarr instead of implementing a custom Sonarr/Radarr download client integration.
 
 ## Reason
 
-Sonarr and Radarr already have mature SABnzbd support. Using this compatibility layer allows Servarr applications to treat Mustarrd as a download backend while the plugin handles Dispatcharr-specific resolution.
+Sonarr and Radarr already have mature SABnzbd support. Using this compatibility layer allows Sonarr/Radarr applications to treat Mustarrd as a download backend while the plugin handles Dispatcharr-specific resolution.
 
 ## Alternatives Considered
 
@@ -233,7 +233,7 @@ The plugin starts and manages a detached Newznab/SAB-compatible service rather t
 
 ## Reason
 
-Servarr applications require a persistent HTTP endpoint. Separating the service improves reliability and isolates external API traffic from plugin loading.
+Newznab endpoint applications require a persistent HTTP endpoint. Separating the service improves reliability and isolates external API traffic from plugin loading.
 
 ## Alternatives Considered
 
@@ -246,7 +246,7 @@ The plugin must manage service startup, health checks, and failure reporting.
 
 ---
 
-# ADR-009: Synthetic Releases Must Preserve Servarr Expectations Without Exposing Provider Details
+# ADR-009: Synthetic Releases Must Preserve Sonarr/Radarr Expectations Without Exposing Provider Details
 
 ## Status
 
@@ -258,7 +258,7 @@ Accepted
 
 ## Decision
 
-The plugin generates Servarr-compatible releases representing Dispatcharr VOD availability while hiding provider implementation details.
+The plugin generates Sonarr/Radarr-compatible releases representing Dispatcharr VOD availability while hiding provider implementation details.
 
 ## Reason
 
@@ -304,7 +304,7 @@ Key rotation is an intentional administrative action.
 
 ---
 
-# ADR-011: Servarr Validation and Real Searches Follow Different Performance Paths
+# ADR-011: Sonarr/Radarr Validation and Real Searches Follow Different Performance Paths
 
 ## Status
 
@@ -320,7 +320,7 @@ Validation requests prioritize speed and availability checks, while actual searc
 
 ## Reason
 
-Servarr validates indexers frequently. Expensive operations during validation caused poor user experience.
+Sonarr/Radarr validates indexers frequently. Expensive operations during validation caused poor user experience.
 
 ## Alternatives Considered
 
@@ -332,7 +332,7 @@ The implementation must maintain separate lightweight and full-resolution workfl
 
 ---
 
-# ADR-012: Lightweight Servarr Feeds
+# ADR-012: Lightweight Sonarr/Radarr Feeds
 
 ## Status
 
@@ -344,7 +344,7 @@ Accepted
 
 ## Decision
 
-Servarr feed requests (RSS, recent releases, and validation-related requests) must use lightweight processing paths and must not trigger full provider searches or media enrichment.
+Sonarr/Radarr feed requests (RSS, recent releases, and validation-related requests) must use lightweight processing paths and must not trigger full provider searches or media enrichment.
 
 ## Reason
 
@@ -440,7 +440,7 @@ Future changes must update the appropriate documentation file:
 
 ---
 
-# ADR-015: Servarr Release Generation Boundary
+# ADR-015: Sonarr/Radarr Release Generation Boundary
 
 ## Status
 
@@ -452,19 +452,19 @@ Accepted
 
 ## Decision
 
-The plugin generates Servarr-compatible releases while keeping provider-specific implementation details hidden behind Dispatcharr.
+The plugin generates Sonarr/Radarr-compatible releases while keeping provider-specific implementation details hidden behind Dispatcharr.
 
 ## Reason
 
 Sonarr and Radarr require release metadata, categories, and download targets, but provider selection and stream resolution belong to Dispatcharr.
 
-The plugin acts as the compatibility layer between Servarr applications and Dispatcharr VOD.
+The plugin acts as the compatibility layer between Sonarr/Radarr applications and Dispatcharr VOD.
 
 ## Alternatives Considered
 
 - Expose provider URLs directly to Sonarr/Radarr.
 - Allow Mustarrd to resolve provider-specific streams.
-- Implement a custom Servarr download client.
+- Implement a custom Sonarr/Radarr download client.
 
 ## Consequences
 
@@ -486,3 +486,264 @@ Mustarrd remains responsible for:
 - retries;
 - queue management;
 - completion processing.
+
+---
+
+# ADR-016: Sonarr/Radarr Compatibility Scope
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The Dispatcharr VOD Newznab plugin exists as an intermediary compatibility layer between Sonarr/Radarr and Mustarrd.
+
+The plugin provides:
+
+- Newznab-compatible search/indexer functionality;
+- SABnzbd-compatible download submission;
+- translation between Sonarr/Radarr requests and Dispatcharr/Mustarrd workflows.
+
+The plugin does not replace functionality already provided by Sonarr/Radarr.
+
+## Reason
+
+Sonarr and Radarr already handle:
+
+- media naming;
+- file organization;
+- metadata management;
+- library imports;
+- Plex/Jellyfin integration workflows.
+
+Duplicating these responsibilities would create unnecessary complexity.
+
+## Alternatives Considered
+
+- Build custom library management into the plugin.
+- Add direct Plex/Jellyfin integration.
+- Create custom Sonarr/Radarr plugins.
+
+## Consequences
+
+The plugin should focus only on:
+
+- making Dispatcharr VOD content available to Sonarr/Radarr;
+- creating compatible releases;
+- submitting downloads.
+
+---
+
+# ADR-017: Sonarr/Radarr Release Naming Ownership
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin generates release names following standard Sonarr/Radarr-compatible naming conventions.
+
+Sonarr/Radarr remain responsible for final file naming and organization.
+
+## Reason
+
+Sonarr/Radarr applications use release metadata for matching and import workflows. Once downloaded, Sonarr/Radarr already provide the correct renaming and library management behavior.
+
+## Alternatives Considered
+
+- Have Mustarrd create final Plex/Jellyfin filenames.
+- Have the plugin manage completed files.
+- Create custom naming logic outside Sonarr/Radarr.
+
+## Consequences
+
+The plugin should not attempt to manage final media paths after download completion.
+
+---
+
+# ADR-018: Metadata Ownership
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+Dispatcharr is authoritative for VOD availability.
+
+TMDB and IMDb identifiers are used for Sonarr/Radarr matching.
+
+Sonarr/Radarr remain authoritative for post-download metadata management.
+
+## Reason
+
+The plugin's purpose is exposing available VOD content, not replacing metadata systems.
+
+## Alternatives Considered
+
+- Implement a separate metadata management system.
+- Have the plugin maintain the final media library state.
+
+## Consequences
+
+The plugin should:
+
+- preserve Dispatcharr availability data;
+- provide matching identifiers;
+- avoid becoming a metadata management layer.
+
+---
+
+# ADR-019: Interactive Search First Architecture
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The primary supported workflow is interactive Sonarr/Radarr searching.
+
+Current flow:
+Sonarr/Radarr
+      |
+      v
+Plugin Newznab API
+      |
+      v
+Dispatcharr VOD
+      |
+      v
+ffprobe enrichment
+      |
+      v
+SAB API
+      |
+      v
+Mustarrd
+
+
+RSS and automatic acquisition workflows are future enhancements.
+
+## Reason
+
+Interactive searches allow accurate stream probing and quality determination.
+
+## Alternatives Considered
+
+- Build RSS support before caching exists.
+- Return unverified release metadata.
+
+## Consequences
+
+Future RSS support requires:
+
+- background VOD scanning;
+- stream metadata caching;
+- release generation from cached data.
+
+---
+
+# ADR-020: SAB-Compatible Download Lifecycle
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+The plugin follows the SABnzbd workflow model.
+
+Plugin responsibilities:
+
+- create Sonarr/Radarr-compatible download jobs;
+- return SAB-compatible responses;
+- determine categories/download destinations.
+
+Mustarrd responsibilities:
+
+- manage incomplete downloads;
+- perform downloads;
+- handle retries;
+- move completed downloads.
+
+Sonarr/Radarr responsibilities:
+
+- import completed downloads;
+- rename files;
+- organize libraries.
+
+## Reason
+
+This mirrors existing Sonarr/Radarr download client behavior and keeps responsibilities separated.
+
+## Alternatives Considered
+
+- Implement downloading inside the plugin.
+- Have the plugin manage completed media.
+
+## Consequences
+
+The plugin should not manage completed media libraries or final organization.
+
+---
+
+# ADR-021: Dispatcharr Instance Scope
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08
+
+## Decision
+
+A plugin instance is tied to a single Dispatcharr instance.
+
+Multi-instance Dispatcharr support is not planned.
+
+## Reason
+
+Dispatcharr owns:
+
+- provider accounts;
+- VOD availability;
+- stream resolution;
+- VOD proxy behavior.
+
+A plugin instance cannot correctly represent multiple independent catalogs.
+
+## Alternatives Considered
+
+- Support multiple Dispatcharr backends from one plugin instance.
+- Aggregate multiple Dispatcharr catalogs.
+
+## Consequences
+
+The plugin lifecycle follows the Dispatcharr instance lifecycle.
+
+---
