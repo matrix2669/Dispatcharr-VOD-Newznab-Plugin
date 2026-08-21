@@ -58,18 +58,22 @@ Plugin:
 - SAB compatibility
 - stream resolution
 - Dispatcharr proxy integration
+- Servarr release generation
 
 Mustarrd:
 
 - downloading
 - retries
+- queue management
 - completion handling
+
+The plugin must not move Dispatcharr-specific provider logic into Mustarrd.
 
 ## Request Path Rules
 
 ### Sonarr/Radarr Validation and RSS
 
-Validation requests must be lightweight.
+Validation and recent-feed requests must be lightweight.
 
 Do not add:
 
@@ -89,6 +93,20 @@ Actual title/TMDB/episode searches may perform:
 
 Use expensive operations only when they improve returned media accuracy.
 
+Validation and interactive searches intentionally follow different performance paths.
+
+## Media Probing Rules
+
+ffprobe is only used when media metadata is required.
+
+Requirements:
+
+- never assume `/usr/bin/ffprobe`;
+- resolve ffprobe dynamically;
+- support different Dispatcharr runtime layouts.
+
+Codec, HDR, resolution, and audio enrichment belongs in full searches, not validation paths.
+
 ## Dispatcharr Integration
 
 Never assume a fixed installation path.
@@ -105,6 +123,8 @@ The detached Newznab/SAB service must:
 - start reliably;
 - expose health status;
 - log failures clearly.
+
+The embedded service currently uses port `9192` and must prevent duplicate startup conflicts.
 
 ## Plugin Settings
 
@@ -159,6 +179,7 @@ Before release validate:
 - Validation paths must remain fast.
 - Do not bypass Dispatcharr proxy URLs.
 - Do not modify released versions; create a new release.
+- Do not make validation paths perform full enrichment.
 
 ## Documentation Rules
 
