@@ -10,16 +10,29 @@ This project follows the AI project standards defined in the matrix2669/workspac
 
 Review `DECISIONS.md` before making architectural changes.
 
+## Related Projects
+
+Changes to this repository require understanding related systems:
+
+- Dispatcharr: `Dispatcharr/Dispatcharr`
+  - Provides the plugin framework, VOD catalog, provider handling, and native VOD proxy behavior.
+- Mustarrd: `matrix2669/mustarrd`
+  - Provides download queueing, retries, processing, and completion lifecycle.
+- Dispatcharr-Mustarrd integration components may affect API contracts and workflow behavior.
+
+When modifying integration behavior, review related projects before making changes.
+
 ## AI Agent Instructions
 
 Before modifying code:
 
 1. Read this file completely.
 2. Review `DECISIONS.md` for architectural context.
-3. Understand the complete request flow before changing implementation.
-4. Preserve existing architecture unless intentionally changing design.
-5. Do not optimize one component while breaking Sonarr/Radarr compatibility.
-6. Test both Sonarr and Radarr workflows after changes.
+3. Review related project behavior when integrations are affected.
+4. Understand the complete request flow before changing implementation.
+5. Preserve existing architecture unless intentionally changing design.
+6. Do not optimize one component while breaking Sonarr/Radarr compatibility.
+7. Test both Sonarr and Radarr workflows after changes.
 
 ## Non-Negotiable Architecture Rules
 
