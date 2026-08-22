@@ -14,8 +14,7 @@ This ledger records why every current branch exists. GitHub remains authoritativ
 | Branch | Type | Status | Base | Target | Purpose |
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable source | Production-ready plugin source and explicitly approved GitHub Releases. |
-| `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version; currently carries the Arr Stack Connector beta. |
-| `release/v0.2.0` | release | active locally | `dev` | `main` and `dev` | Finalize the tested Arr Stack Connector beta as stable version `0.2.0`. |
+| `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version; synchronized to stable Arr Stack Connector `0.2.0`. |
 | `docs/bootstrap-release-sync` | documentation | superseded | `main` at `1b35bf4` | none | Historical bootstrap follow-up; later documentation on `main` supersedes its two commits. |
 | `v0.1.0` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.0`; replace with tag `v0.1.0`. |
 | `v0.1.1` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.1`; replace with tag `v0.1.1`. |
@@ -40,29 +39,20 @@ This ledger records why every current branch exists. GitHub remains authoritativ
 ### `main`
 
 - Purpose: production-ready source and the line for stable tags and explicitly approved GitHub Releases.
-- Current plugin version: `0.1.16`.
-- Current distribution: advertised by both registry branches under the legacy public identity, although GitHub currently reports no Releases. The registry `main` entry must be reconciled separately with the explicit-Release rule rather than silently treated as approved precedent.
-- Last verified head: `13c5d114fce94ae4c802128bae224d8623163141`.
+- Current plugin version: `0.2.0`.
+- Current distribution: approved for normal GitHub Release `v0.2.0` and focused publication through the registry `main` channel.
+- Promotion source: the live-tested `v0.2.0-beta.1` state, with only version and release metadata changed for the stable build.
 - Last verified at: `2026-08-22`.
 
 ### `dev`
 
 - Purpose: integrate and validate the next plugin version before promotion to `main`.
 - Base: `main` at `13c5d114fce94ae4c802128bae224d8623163141`.
-- Current plugin version: `0.2.0-beta.1`.
-- Current state: the approved Arr Stack Connector rename and standalone workflow are integrated and ready for publication as immutable tag `v0.2.0-beta.1`.
+- Current plugin version: `0.2.0`.
+- Current state: synchronized to the completed stable source promoted to `main` and approved for release.
 - Intended target: `main` after versioned testing is complete.
-- Validation: 28 unit tests pass from the renamed source directory; all Python modules compile; `plugin.json` parses; version and identity assertions agree; Dispatcharr `v0.29.0` confirms slug normalization; and a clean beta archive has the required `arr-stack-connector/` root.
+- Validation: 28 unit tests pass; all Python modules compile; `plugin.json` parses; version and identity assertions agree; the beta installed successfully on Dispatcharr; and the clean release ZIP is required to contain only the top-level `arr-stack-connector/` directory.
 - Last verified at: `2026-08-22`.
-
-### `release/v0.2.0`
-
-- Purpose: promote the successfully installed `0.2.0-beta.1` build to stable `0.2.0` without functional changes.
-- Base: `dev` at `0e4b53f3a3780001b017c2fbe5cc97404e5d75cf`.
-- Intended targets: fast-forward `main`, tag and release `v0.2.0`, then synchronize `dev` to the same stable state.
-- In scope: version metadata, final changelog date, release archive, GitHub Release, and registry publication.
-- Out of scope: functional Newznab, SAB, Dispatcharr, or Mustarrd changes.
-- Validation: repeat the full source suite and archive checks; live beta installation was approved on 2026-08-22.
 
 ## Historical branch cleanup
 
