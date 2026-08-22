@@ -15,6 +15,7 @@ This ledger records why every current branch exists. GitHub remains authoritativ
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable source | Production-ready plugin source and explicitly approved GitHub Releases. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version; currently carries the Arr Stack Connector beta. |
+| `release/v0.2.0` | release | active locally | `dev` | `main` and `dev` | Finalize the tested Arr Stack Connector beta as stable version `0.2.0`. |
 | `docs/bootstrap-release-sync` | documentation | superseded | `main` at `1b35bf4` | none | Historical bootstrap follow-up; later documentation on `main` supersedes its two commits. |
 | `v0.1.0` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.0`; replace with tag `v0.1.0`. |
 | `v0.1.1` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.1`; replace with tag `v0.1.1`. |
@@ -53,6 +54,15 @@ This ledger records why every current branch exists. GitHub remains authoritativ
 - Intended target: `main` after versioned testing is complete.
 - Validation: 28 unit tests pass from the renamed source directory; all Python modules compile; `plugin.json` parses; version and identity assertions agree; Dispatcharr `v0.29.0` confirms slug normalization; and a clean beta archive has the required `arr-stack-connector/` root.
 - Last verified at: `2026-08-22`.
+
+### `release/v0.2.0`
+
+- Purpose: promote the successfully installed `0.2.0-beta.1` build to stable `0.2.0` without functional changes.
+- Base: `dev` at `0e4b53f3a3780001b017c2fbe5cc97404e5d75cf`.
+- Intended targets: fast-forward `main`, tag and release `v0.2.0`, then synchronize `dev` to the same stable state.
+- In scope: version metadata, final changelog date, release archive, GitHub Release, and registry publication.
+- Out of scope: functional Newznab, SAB, Dispatcharr, or Mustarrd changes.
+- Validation: repeat the full source suite and archive checks; live beta installation was approved on 2026-08-22.
 
 ## Historical branch cleanup
 
