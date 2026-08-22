@@ -14,8 +14,7 @@ This ledger records why every current branch exists. GitHub remains authoritativ
 | Branch | Type | Status | Base | Target | Purpose |
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable source | Production-ready plugin source and explicitly approved GitHub Releases. |
-| `dev` | long-lived | active locally | `main` | `main` | Integrate and validate the next plugin version. |
-| `feature/arr-stack-rename-workflow` | feature | active locally | `dev` | `dev` | Rename the public project identity and adopt the standalone workflow without breaking installed upgrades. |
+| `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version; currently carries the Arr Stack Connector beta. |
 | `docs/bootstrap-release-sync` | documentation | superseded | `main` at `1b35bf4` | none | Historical bootstrap follow-up; later documentation on `main` supersedes its two commits. |
 | `v0.1.0` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.0`; replace with tag `v0.1.0`. |
 | `v0.1.1` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.1`; replace with tag `v0.1.1`. |
@@ -49,22 +48,10 @@ This ledger records why every current branch exists. GitHub remains authoritativ
 
 - Purpose: integrate and validate the next plugin version before promotion to `main`.
 - Base: `main` at `13c5d114fce94ae4c802128bae224d8623163141`.
-- Current state: created locally for this migration; publish only after the review branch is approved and integrated.
+- Current plugin version: `0.2.0-beta.1`.
+- Current state: the approved Arr Stack Connector rename and standalone workflow are integrated and ready for publication as immutable tag `v0.2.0-beta.1`.
 - Intended target: `main` after versioned testing is complete.
-- Last verified at: `2026-08-22`.
-
-### `feature/arr-stack-rename-workflow`
-
-- Purpose: adopt the standalone `main`/`dev`/tag workflow and rename the public project to **Dispatcharr Arr Stack Plugin**.
-- Base: local `dev` at `13c5d114fce94ae4c802128bae224d8623163141`.
-- Intended target: `dev`.
-- In scope: user-facing names, GitHub repository rename, registry/archive slug, installed and state directories, plugin-owned environment variables, migration guidance, project documentation, release procedure, and a plan to replace historical version branches with immutable tags.
-- Out of scope: GitHub Release creation, released-registry publication, or functional changes to the Newznab/SAB/Mustarrd bridge.
-- Migration boundary: use `arr-stack-connector` for the registry and source archive, `arr_stack_connector` for the installed key/directory, `/data/arr_stack_connector` for state, and `ARR_STACK_CONNECTOR_*` for plugin-owned environment variables. Preserve the internal bridge package, settings IDs, APIs, descriptors, job IDs, and port defaults.
-- Validation: 28 unit tests pass from the renamed source directory; all Python modules compile; `plugin.json` parses; `VERSION`, manifest, plugin class, and bridge package agree at `0.2.0-beta.1`; display-name, source-directory, installed-key, state-root, and environment-name assertions pass; 27 ADRs and Git whitespace pass. Dispatcharr `v0.29.0` confirms `arr-stack-connector` sanitizes to `arr_stack_connector`. A clean beta ZIP contains the required `arr-stack-connector/` layout with no Python cache or macOS metadata. The legacy `v0.1.16` archive was verified at `4d8f574c7d9a07d02978a68ec252fe3303344b0b`; registry migration and live one-time upgrade testing remain pending approval.
-- Related decisions: ADR-022 and ADR-023.
-- Related conversation: Codex `Update standalone release workflow` (`01a02969-01f0-7803-8031-37f7f4f2803c`).
-- Last verified head before edits: `13c5d114fce94ae4c802128bae224d8623163141`.
+- Validation: 28 unit tests pass from the renamed source directory; all Python modules compile; `plugin.json` parses; version and identity assertions agree; Dispatcharr `v0.29.0` confirms slug normalization; and a clean beta archive has the required `arr-stack-connector/` root.
 - Last verified at: `2026-08-22`.
 
 ## Historical branch cleanup
