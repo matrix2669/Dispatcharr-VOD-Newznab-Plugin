@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import re
 import sys
@@ -166,7 +167,7 @@ class PluginRuntimeTests(unittest.TestCase):
         cls._state_dir = tempfile.TemporaryDirectory()
         cls._env = patch.dict(
             os.environ,
-            {"DISPATCHARR_VOD_NEWZNAB_STATE_DIR": cls._state_dir.name},
+            {"ARR_STACK_CONNECTOR_STATE_DIR": cls._state_dir.name},
         )
         cls._env.start()
         cls.plugin_module = importlib.import_module("plugin")
@@ -196,7 +197,7 @@ class PluginRuntimeTests(unittest.TestCase):
     def test_service_start_failure_keeps_plugin_loaded_for_diagnostics(self):
         with patch.dict(
             os.environ,
-            {"DISPATCHARR_VOD_NEWZNAB_SERVICE": ""},
+            {"ARR_STACK_CONNECTOR_SERVICE": ""},
             clear=False,
         ):
             with patch.object(
@@ -207,6 +208,19 @@ class PluginRuntimeTests(unittest.TestCase):
                 instance = self.plugin_module.Plugin()
 
         self.assertIsInstance(instance, self.plugin_module.Plugin)
+
+    def test_public_rename_uses_new_installed_identity(self):
+        manifest = json.loads((ROOT / "plugin.json").read_text())
+        self.assertEqual(manifest["name"], "Arr Stack Connector")
+        self.assertEqual(self.plugin_module.PLUGIN_NAME, "Arr Stack Connector")
+        self.assertEqual(ROOT.name, "arr-stack-connector")
+        self.assertEqual(self.plugin_module.STATE_DIR, Path(self._state_dir.name))
+        plugin_source = (ROOT / "plugin.py").read_text()
+        self.assertIn("ARR_STACK_CONNECTOR_STATE_DIR", plugin_source)
+        self.assertIn("/data/arr_stack_connector", plugin_source)
+        self.assertNotIn("DISPATCHARR_VOD_NEWZNAB", plugin_source)
+        newznab_source = (ROOT / "servarr_bridge" / "newznab.py").read_text()
+        self.assertIn('title="Arr Stack Connector"', newznab_source)
 
 
 class DescriptorTests(unittest.TestCase):

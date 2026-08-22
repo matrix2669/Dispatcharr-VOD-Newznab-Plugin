@@ -1,0 +1,72 @@
+# Branches
+
+This ledger records why every current branch exists. GitHub remains authoritative for live refs, commits, pull requests, and checks.
+
+## Maintenance rules
+
+- Add or update a record before substantive work begins on a branch.
+- Refresh observed heads and validation before review or promotion.
+- Use a branch record as source material for a pull request, but verify it against the current diff first.
+- Before deleting a branch, transfer user-visible results to `CHANGELOG.md` and durable rationale to `DECISIONS.md`, then remove its entry here.
+
+## Branch index
+
+| Branch | Type | Status | Base | Target | Purpose |
+|---|---|---|---|---|---|
+| `main` | long-lived | active | initial project history | stable source | Production-ready plugin source and explicitly approved GitHub Releases. |
+| `dev` | long-lived | active locally | `main` | `main` | Integrate and validate the next plugin version. |
+| `feature/arr-stack-rename-workflow` | feature | active locally | `dev` | `dev` | Rename the public project identity and adopt the standalone workflow without breaking installed upgrades. |
+| `docs/bootstrap-release-sync` | documentation | superseded | `main` at `1b35bf4` | none | Historical bootstrap follow-up; later documentation on `main` supersedes its two commits. |
+| `v0.1.0` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.0`; replace with tag `v0.1.0`. |
+| `v0.1.1` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.1`; replace with tag `v0.1.1`. |
+| `v0.1.2` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.2`; replace with tag `v0.1.2`. |
+| `v0.1.3` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.3`; replace with tag `v0.1.3`. |
+| `v0.1.4` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.4`; replace with tag `v0.1.4`. |
+| `v0.1.5` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.5`; replace with tag `v0.1.5`. |
+| `v0.1.6` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.6`; replace with tag `v0.1.6`. |
+| `v0.1.7` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.7`; replace with tag `v0.1.7`. |
+| `v0.1.8` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.8`; replace with tag `v0.1.8`. |
+| `v0.1.9` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.9`; replace with tag `v0.1.9`. |
+| `v0.1.10` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.10`; replace with tag `v0.1.10`. |
+| `v0.1.11` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.11`; replace with tag `v0.1.11`. |
+| `v0.1.12` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.12`; replace with tag `v0.1.12`. |
+| `v0.1.13` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.13`; replace with tag `v0.1.13`. |
+| `v0.1.14` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.14`; replace with tag `v0.1.14`. |
+| `v0.1.15` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.15`; replace with tag `v0.1.15`. |
+| `v0.1.16` | historical version branch | superseded | project history | immutable tag | Preserves the source advertised as plugin version `0.1.16`; replace with tag `v0.1.16`. |
+
+## Active branch records
+
+### `main`
+
+- Purpose: production-ready source and the line for stable tags and explicitly approved GitHub Releases.
+- Current plugin version: `0.1.16`.
+- Current distribution: advertised by both registry branches under the legacy public identity, although GitHub currently reports no Releases. The registry `main` entry must be reconciled separately with the explicit-Release rule rather than silently treated as approved precedent.
+- Last verified head: `13c5d114fce94ae4c802128bae224d8623163141`.
+- Last verified at: `2026-08-22`.
+
+### `dev`
+
+- Purpose: integrate and validate the next plugin version before promotion to `main`.
+- Base: `main` at `13c5d114fce94ae4c802128bae224d8623163141`.
+- Current state: created locally for this migration; publish only after the review branch is approved and integrated.
+- Intended target: `main` after versioned testing is complete.
+- Last verified at: `2026-08-22`.
+
+### `feature/arr-stack-rename-workflow`
+
+- Purpose: adopt the standalone `main`/`dev`/tag workflow and rename the public project to **Dispatcharr Arr Stack Plugin**.
+- Base: local `dev` at `13c5d114fce94ae4c802128bae224d8623163141`.
+- Intended target: `dev`.
+- In scope: user-facing names, GitHub repository rename, registry/archive slug, installed and state directories, plugin-owned environment variables, migration guidance, project documentation, release procedure, and a plan to replace historical version branches with immutable tags.
+- Out of scope: GitHub Release creation, released-registry publication, or functional changes to the Newznab/SAB/Mustarrd bridge.
+- Migration boundary: use `arr-stack-connector` for the registry and source archive, `arr_stack_connector` for the installed key/directory, `/data/arr_stack_connector` for state, and `ARR_STACK_CONNECTOR_*` for plugin-owned environment variables. Preserve the internal bridge package, settings IDs, APIs, descriptors, job IDs, and port defaults.
+- Validation: 28 unit tests pass from the renamed source directory; all Python modules compile; `plugin.json` parses; `VERSION`, manifest, plugin class, and bridge package agree at `0.2.0-beta.1`; display-name, source-directory, installed-key, state-root, and environment-name assertions pass; 27 ADRs and Git whitespace pass. Dispatcharr `v0.29.0` confirms `arr-stack-connector` sanitizes to `arr_stack_connector`. A clean beta ZIP contains the required `arr-stack-connector/` layout with no Python cache or macOS metadata. The legacy `v0.1.16` archive was verified at `4d8f574c7d9a07d02978a68ec252fe3303344b0b`; registry migration and live one-time upgrade testing remain pending approval.
+- Related decisions: ADR-022 and ADR-023.
+- Related conversation: Codex `Update standalone release workflow` (`01a02969-01f0-7803-8031-37f7f4f2803c`).
+- Last verified head before edits: `13c5d114fce94ae4c802128bae224d8623163141`.
+- Last verified at: `2026-08-22`.
+
+## Historical branch cleanup
+
+The `v0.1.0` through `v0.1.16` branches are remnants of the former registry workflow. Before deleting them, create immutable tags with the same names at the exact recorded branch heads and verify every existing registry archive resolves to the same commit. The `docs/bootstrap-release-sync` branch may be deleted after confirming its useful results are already present or superseded on `main`. Remove these entries only after the remote branches are actually deleted.

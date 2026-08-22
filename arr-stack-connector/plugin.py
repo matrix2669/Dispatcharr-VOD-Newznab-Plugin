@@ -12,10 +12,10 @@ from pathlib import Path
 from urllib.request import urlopen
 
 
-PLUGIN_NAME = "Dispatcharr VOD Newznab"
+PLUGIN_NAME = "Arr Stack Connector"
 ROOT = Path(__file__).resolve().parent
 PLUGIN_KEY = ROOT.name.replace(" ", "_").lower()
-STATE_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_STATE_DIR") or "/data/dispatcharr_vod_newznab")
+STATE_DIR = Path(os.environ.get("ARR_STACK_CONNECTOR_STATE_DIR") or "/data/arr_stack_connector")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 PID_FILE = STATE_DIR / ".servarr_service.pid"
 LOCK_FILE = STATE_DIR / ".servarr_service.lock"
@@ -106,15 +106,15 @@ def _dedupe_path_entries(entries):
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.1.16"
-    description = "Newznab + SABnzbd bridge for raw Dispatcharr VOD providers backed by Mustarrd."
+    version = "0.2.0-beta.1"
+    description = "Arr stack bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 
     fields = []
     actions = []
 
     def __init__(self):
-        if os.environ.get("DISPATCHARR_VOD_NEWZNAB_SERVICE", "").lower() in {"1", "true", "yes"}:
+        if os.environ.get("ARR_STACK_CONNECTOR_SERVICE", "").lower() in {"1", "true", "yes"}:
             return
         try:
             self._ensure_service()
@@ -221,12 +221,12 @@ class Plugin:
         interpreter = self._interpreter()
         app_roots = _dispatcharr_app_roots()
         env = os.environ.copy()
-        env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY"] = PLUGIN_KEY
-        env["DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR"] = str(ROOT)
-        env["DISPATCHARR_VOD_NEWZNAB_STATE_DIR"] = str(STATE_DIR)
-        env["DISPATCHARR_VOD_NEWZNAB_SERVICE"] = "1"
+        env["ARR_STACK_CONNECTOR_PLUGIN_KEY"] = PLUGIN_KEY
+        env["ARR_STACK_CONNECTOR_PLUGIN_DIR"] = str(ROOT)
+        env["ARR_STACK_CONNECTOR_STATE_DIR"] = str(STATE_DIR)
+        env["ARR_STACK_CONNECTOR_SERVICE"] = "1"
         env["DISPATCHARR_SKIP_PLUGIN_AUTODISCOVERY"] = "1"
-        env["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = self._desired_version()
+        env["ARR_STACK_CONNECTOR_RUNNING_VERSION"] = self._desired_version()
         env["PYTHONPATH"] = self._child_pythonpath()
         if app_roots:
             env["DISPATCHARR_APP_ROOT"] = str(app_roots[0])

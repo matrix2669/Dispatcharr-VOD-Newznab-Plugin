@@ -1,3 +1,5 @@
+"""Sonarr and Radarr release naming for Arr Stack Connector."""
+
 import re
 from .probe import audio_label, classify_dynamic_range, resolution_label, video_codec_label
 

@@ -4,9 +4,9 @@ import secrets
 from pathlib import Path
 
 
-PLUGIN_KEY = os.environ.get("DISPATCHARR_VOD_NEWZNAB_PLUGIN_KEY", "dispatcharr-vod-newznab-plugin")
-PLUGIN_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR") or Path(__file__).resolve().parents[1])
-STATE_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_STATE_DIR") or "/data/dispatcharr_vod_newznab")
+PLUGIN_KEY = os.environ.get("ARR_STACK_CONNECTOR_PLUGIN_KEY", "arr_stack_connector")
+PLUGIN_DIR = Path(os.environ.get("ARR_STACK_CONNECTOR_PLUGIN_DIR") or Path(__file__).resolve().parents[1])
+STATE_DIR = Path(os.environ.get("ARR_STACK_CONNECTOR_STATE_DIR") or "/data/arr_stack_connector")
 
 DEFAULTS = {
     "listen_host": "0.0.0.0",

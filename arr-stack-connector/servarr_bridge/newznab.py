@@ -14,7 +14,7 @@ ET.register_namespace("newznab", NEWZNAB_NS)
 
 def caps_xml():
     caps = ET.Element("caps")
-    ET.SubElement(caps, "server", version="1.0", title="Dispatcharr VOD Newznab")
+    ET.SubElement(caps, "server", version="1.0", title="Arr Stack Connector")
     ET.SubElement(caps, "limits", max="100", default="100")
     ET.SubElement(caps, "registration", available="no", open="no")
     searching = ET.SubElement(caps, "searching")
@@ -176,8 +176,8 @@ def rss_xml(results, base_url, api_key, offset=0, limit=100):
     page = results[offset:offset + limit]
     rss = ET.Element("rss", version="2.0")
     channel = ET.SubElement(rss, "channel")
-    ET.SubElement(channel, "title").text = "Dispatcharr VOD"
-    ET.SubElement(channel, "description").text = "Raw Dispatcharr VOD Interactive Search"
+    ET.SubElement(channel, "title").text = "Arr Stack Connector"
+    ET.SubElement(channel, "description").text = "Raw Dispatcharr VOD interactive search for Sonarr and Radarr"
     ET.SubElement(channel, "link").text = base_url
     ET.SubElement(channel, f"{{{NEWZNAB_NS}}}response", offset=str(offset), total=str(total))
     for result in page:

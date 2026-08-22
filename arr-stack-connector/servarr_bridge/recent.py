@@ -1,3 +1,5 @@
+"""Lightweight recent feeds for Arr Stack Connector."""
+
 import email.utils
 import logging
 import re

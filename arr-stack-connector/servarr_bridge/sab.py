@@ -1,3 +1,5 @@
+"""SAB-compatible Mustarrd translation for Arr Stack Connector."""
+
 import json
 import logging
 import os

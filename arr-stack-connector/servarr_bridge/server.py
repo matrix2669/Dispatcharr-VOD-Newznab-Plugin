@@ -17,7 +17,7 @@ from . import sab
 
 
 logger = logging.getLogger(__name__)
-SERVICE_VERSION = str(os.environ.get("DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION") or "unknown")
+SERVICE_VERSION = str(os.environ.get("ARR_STACK_CONNECTOR_RUNNING_VERSION") or "unknown")
 
 
 def _one(params, name, default=None):
@@ -56,7 +56,7 @@ def _multipart_file(content_type, body, field_name="name"):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "DispatcharrVODNewznab/0.1"
+    server_version = "ArrStackConnector/0.2"
 
     def log_message(self, fmt, *args):
         if self.path == "/health":
@@ -172,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/health":
             return self._send(200, {
                 "status": "ok",
-                "service": "dispatcharr-vod-newznab",
+                "service": "arr-stack-connector",
                 "version": SERVICE_VERSION,
                 "pid": os.getpid(),
             })
@@ -255,13 +255,13 @@ def run_server():
 
     watcher = threading.Thread(
         target=watch_installed_version,
-        name="dispatcharr-vod-newznab-version-watch",
+        name="arr-stack-connector-version-watch",
         daemon=True,
     )
     watcher.start()
 
     logger.info(
-        "Dispatcharr VOD Newznab/SAB service version %s listening on %s:%s (pid=%s)",
+        "Arr Stack Connector Newznab/SAB service version %s listening on %s:%s (pid=%s)",
         SERVICE_VERSION,
         host,
         port,
@@ -276,7 +276,7 @@ def run_server():
         installed = restart_version["value"]
         if installed:
             env = os.environ.copy()
-            env["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = installed
+            env["ARR_STACK_CONNECTOR_RUNNING_VERSION"] = installed
             service_script = PLUGIN_DIR / "service.py"
             logger.info(
                 "Re-executing detached service from updated plugin version %s using %s",

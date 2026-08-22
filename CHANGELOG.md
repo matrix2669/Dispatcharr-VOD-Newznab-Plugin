@@ -6,16 +6,21 @@ This file contains release history only. Architectural decisions belong in `DECI
 
 The format follows Keep a Changelog principles where practical.
 
-## [Unreleased]
+## [0.2.0-beta.1] - Unreleased
 
 ### Added
 
 - Added project AI documentation structure with `AGENT.md` and `DECISIONS.md`.
 - Documented architecture decisions for Dispatcharr proxy handling, Mustarrd integration, and Servarr compatibility.
+- Added standalone branch tracking, canonical version, and release procedures.
 
 ### Changed
 
 - Improved documentation separation between user guidance, agent instructions, architectural decisions, and release history.
+- Renamed the public project to **Dispatcharr Arr Stack Plugin** and the in-Dispatcharr display name to **Arr Stack Connector**.
+- Adopted the standalone `main`/`dev` workflow with immutable beta and stable tags instead of permanent version branches.
+- Changed the registry/archive slug to `arr-stack-connector`, installed key to `arr_stack_connector`, state root to `/data/arr_stack_connector`, and plugin-owned environment variables to `ARR_STACK_CONNECTOR_*`.
+- Added a one-time migration path from the legacy plugin and state directories while preserving settings IDs, API behavior, and job-state formats.
 
 ## [0.1.16]
 

@@ -1,3 +1,5 @@
+"""Dispatcharr VOD provider integration for Arr Stack Connector."""
+
 import logging
 import re
 import threading

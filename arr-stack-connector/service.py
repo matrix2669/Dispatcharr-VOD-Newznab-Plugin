@@ -6,15 +6,15 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
-ROOT = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_PLUGIN_DIR") or Path(__file__).resolve().parent)
-STATE_DIR = Path(os.environ.get("DISPATCHARR_VOD_NEWZNAB_STATE_DIR") or "/data/dispatcharr_vod_newznab")
+ROOT = Path(os.environ.get("ARR_STACK_CONNECTOR_PLUGIN_DIR") or Path(__file__).resolve().parent)
+STATE_DIR = Path(os.environ.get("ARR_STACK_CONNECTOR_STATE_DIR") or "/data/arr_stack_connector")
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = STATE_DIR / "servarr_service.log"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dispatcharr.settings")
-os.environ["DISPATCHARR_VOD_NEWZNAB_STATE_DIR"] = str(STATE_DIR)
+os.environ["ARR_STACK_CONNECTOR_STATE_DIR"] = str(STATE_DIR)
 
 
 def _installed_version():
@@ -30,7 +30,7 @@ if installed_version:
     # The parent Dispatcharr worker may still have an older Plugin class loaded
     # immediately after an atomic plugin update. The child always trusts the
     # manifest currently installed on disk.
-    os.environ["DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION"] = installed_version
+    os.environ["ARR_STACK_CONNECTOR_RUNNING_VERSION"] = installed_version
 
 
 def _configure_logging():
@@ -63,10 +63,10 @@ def _configure_logging():
 
 
 _configure_logging()
-logger = logging.getLogger("dispatcharr_vod_newznab.service")
+logger = logging.getLogger("arr_stack_connector.service")
 logger.info(
     "Starting embedded Newznab/SAB service version %s",
-    os.environ.get("DISPATCHARR_VOD_NEWZNAB_RUNNING_VERSION", "unknown"),
+    os.environ.get("ARR_STACK_CONNECTOR_RUNNING_VERSION", "unknown"),
 )
 
 try:
@@ -77,7 +77,7 @@ except Exception:
     raise
 
 _configure_logging()
-logger = logging.getLogger("dispatcharr_vod_newznab.service")
+logger = logging.getLogger("arr_stack_connector.service")
 
 try:
     from servarr_bridge.server import run_server

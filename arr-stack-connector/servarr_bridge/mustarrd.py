@@ -1,3 +1,5 @@
+"""Mustarrd client used by Arr Stack Connector."""
+
 import threading
 
 import requests

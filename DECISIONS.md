@@ -1,6 +1,17 @@
 # Architecture Decisions
 
-This file documents important architectural decisions for the Dispatcharr VOD Newznab plugin.
+This file documents important architectural decisions for the **Dispatcharr Arr Stack Plugin**, formerly named **Dispatcharr VOD Newznab Plugin**.
+
+It was reconstructed from the complete available `Sonarr Radarr VOD Connector` ChatGPT history, the current standalone-workflow task, the full repository history and remote branch state, the implementation and tests, the Dispatcharr plugin registry, and related Dispatcharr/Mustarrd contracts. Conversation proposals are evidence rather than decisions by themselves; accepted behavior reflects the implementation and user-approved outcomes that survived testing.
+
+## Evidence index
+
+- ChatGPT `Sonarr Radarr VOD Connector`: `6a7c763c-62d4-83ea-a2a6-0fddaab941e4`
+- ChatGPT `Simplify Plugin Versioning`: `6a898c9e-1ffc-83ea-8fcc-b44788fea3c0`
+- Codex `Update standalone release workflow`: `01a02969-01f0-7803-8031-37f7f4f2803c`
+- Repository history: initial commit `833bc16` through documentation baseline `13c5d11`
+- Distribution repository: `matrix2669/dispatcharr-plugins`
+- Related projects: `Dispatcharr/Dispatcharr` `v0.29.0` at `d9abece081c9edf637d4c3fdd41443eb993a3c08`; `matrix2669/mustarrd:dev` at `7c56b83879f76faff8f303c139063a1f51a75431`
 
 Each decision records:
 
@@ -501,7 +512,7 @@ Accepted
 
 ## Decision
 
-The Dispatcharr VOD Newznab plugin exists as an intermediary compatibility layer between Sonarr/Radarr and Mustarrd.
+The Dispatcharr Arr Stack Plugin exists as an intermediary compatibility layer between Sonarr/Radarr and Mustarrd.
 
 The plugin provides:
 
@@ -745,5 +756,242 @@ A plugin instance cannot correctly represent multiple independent catalogs.
 ## Consequences
 
 The plugin lifecycle follows the Dispatcharr instance lifecycle.
+
+---
+
+# ADR-022: Rename the Public and Installed Plugin Identity With a One-Time Migration
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-22
+
+## Decision
+
+Use **Dispatcharr Arr Stack Plugin** as the public project name and **Arr Stack Connector** as the plugin's display name. Use `matrix2669/Dispatcharr-Arr-Stack-Plugin` as the canonical GitHub repository name.
+
+Adopt `arr-stack-connector` as the registry slug and source archive directory, `arr_stack_connector` as the normalized Dispatcharr installation key/directory, `/data/arr_stack_connector` as the persistent state root, and `ARR_STACK_CONNECTOR_*` for plugin-owned environment variables.
+
+Preserve the `servarr_bridge` package, settings IDs, routes, descriptor format, namespaced job IDs, and default port. Existing installations perform a one-time manual migration of the plugin directory, state directory, and saved settings/API key while the old plugin is disabled.
+
+## Reason
+
+The implementation connects more than a Newznab endpoint: it coordinates Sonarr, Radarr, Dispatcharr, the SAB-compatible handoff, and Mustarrd. “Arr Stack Connector” describes that broader responsibility. The user accepted a one-time migration on the single existing installation so the long-term public and installed identities can be consistent.
+
+## Alternatives Considered
+
+- Keep the old public name. Rejected because it describes only one protocol surface and obscures the complete integration.
+- Preserve every legacy slug and path indefinitely. Initially proposed for automatic upgrade compatibility, then rejected because the user preferred a clean identity and accepted the one-time migration.
+- Rename the internal `servarr_bridge` package and persisted protocol formats. Rejected because those are implementation/protocol contracts and provide no user-facing naming benefit.
+
+## Consequences
+
+The renamed plugin appears as a new Dispatcharr key rather than an in-place update. The old service must be disabled before the new one starts, and settings/API key plus persistent state must be transferred once. The registry retains the legacy manifest only as unindexed history after the new slug is published.
+
+## Provenance
+
+- User direction in Codex `Update standalone release workflow`, 2026-08-22
+- Current registry slug and historical archives in `matrix2669/dispatcharr-plugins`
+- Existing runtime/state contracts in `plugin.py`, `service.py`, and `servarr_bridge`
+
+---
+
+# ADR-023: Use the Standalone Main/Dev and Immutable-Tag Workflow
+
+## Status
+
+Accepted; supersedes permanent version branches
+
+## Date
+
+2026-08-22
+
+## Decision
+
+Operate this repository as a standalone Dispatcharr plugin:
+
+- `main` is production-ready and is the source for explicitly approved GitHub Releases;
+- `dev` integrates the next version;
+- short-lived feature and fix branches start from and return to `dev`;
+- tested beta builds use immutable `vMAJOR.MINOR.PATCH-beta.N` tags on `dev` without GitHub prereleases;
+- completed feature/fix work uses a normal Semantic Version tag, whether or not a GitHub Release is approved;
+- `dispatcharr-plugins:dev` advertises the newest approved tag;
+- `dispatcharr-plugins:main` changes only after explicit approval of a normal GitHub Release;
+- `BRANCHES.md` tracks only branches that currently exist.
+
+Convert historical `v0.1.0` through `v0.1.16` branch heads to same-name immutable tags at the exact commits before deleting those branches. Delete the superseded bootstrap documentation branch only after verifying its durable content is already incorporated.
+
+## Reason
+
+Dispatcharr update detection depends on version increments and the registry requires immutable archive targets. Tags express version identity without permanent branch clutter. Separating the testing registry from GitHub Releases also allows completed stable builds to remain available for plugin testing without implying public release approval.
+
+## Alternatives Considered
+
+- Keep permanent version branches. Rejected because tags provide the required immutable archive identity more directly.
+- Point the testing registry at moving `dev`. Rejected because Dispatcharr will not update unless the plugin version changes.
+- Create a GitHub prerelease for every beta. Rejected because the registry `dev` channel is the testing publication mechanism.
+- Automatically copy every stable tag into the released registry. Rejected because stable feature completion and explicit public Release approval are separate decisions.
+
+## Consequences
+
+Every advertised build needs synchronized version metadata and a new immutable tag. Historical branch cleanup must preserve each legacy registry URL's commit. The repository rename and change to the `arr-stack-connector` slug must be coordinated across both registry branches, with the legacy manifest retained only as unindexed history.
+
+## Provenance
+
+- ChatGPT `Simplify Plugin Versioning`
+- Codex `Update standalone release workflow`
+- Workspace standalone standards and Dispatcharr plugin distribution profile
+- Live GitHub and registry state reviewed 2026-08-22
+
+---
+
+# ADR-024: Search Original Provider Catalogs and Materialize Only the Grabbed Variant
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-12
+
+## Decision
+
+Interactive searches query the enabled original Xtream VOD accounts configured in Dispatcharr rather than only its deduplicated XC output. Return separate synthetic releases for matching raw variants so Sonarr and Radarr can distinguish available resolution, codec, audio, and dynamic-range choices.
+
+If the chosen raw movie or episode was omitted by normal Dispatcharr import deduplication, create only the missing relation for that exact provider account and stream at grab time. Do not bulk-import or maintain a competing VOD catalog.
+
+## Reason
+
+The deduplicated catalog can collapse multiple encodes of the same TMDB title into one item. The purpose of interactive search is to expose real provider choices while retaining Dispatcharr as the VOD authority.
+
+## Alternatives Considered
+
+- Return only the deduplicated Dispatcharr item. Rejected because it hides real quality variants.
+- Let Mustarrd search providers independently. Rejected because provider ownership belongs to Dispatcharr.
+- Import every raw variant permanently in advance. Rejected because it expands Dispatcharr state unnecessarily and duplicates catalog responsibility.
+
+## Consequences
+
+Interactive search can be more expensive and is bounded by configured limits. Exact provider account and stream identity must survive in the signed descriptor and be verified again on grab. Validation feeds remain on the separate lightweight path.
+
+## Provenance
+
+- ChatGPT `Sonarr Radarr VOD Connector`, 2026-08-12 discussion of collapsed results and quality variants
+- Commits `3b9286b`, `0fbf846`, and `26f243c`
+
+---
+
+# ADR-025: Force Downloads Through an Explicit Session-Bearing Dispatcharr Proxy URL
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-12
+
+## Decision
+
+Require the operator to configure the Dispatcharr base URL reachable by Mustarrd. For each grab, build a native `/proxy/vod/...` URL containing a unique session identifier plus the exact provider account and stream ID.
+
+Do not guess the Dispatcharr hostname and do not pass the provider redirect URL to Mustarrd.
+
+## Reason
+
+Dispatcharr's Redirect profile can issue a provider redirect before it creates the tracked proxy session when no session ID is present. Mustarrd would then bypass Dispatcharr's connection manager and the download would disappear from Dispatcharr VOD statistics. A pre-existing session ID keeps the transfer on the native proxy path, and an explicit URL avoids deployment-specific hostname assumptions.
+
+## Alternatives Considered
+
+- Give Mustarrd the raw provider URL. Rejected because it bypasses Dispatcharr and exposes provider details.
+- Use Dispatcharr's ordinary first-request URL without a session. Rejected because Redirect profiles can bypass tracking.
+- Infer `http://dispatcharr:9191`. Initially used, then superseded because that hostname is not valid in every deployment.
+
+## Consequences
+
+Configuration must include a Mustarrd-reachable Dispatcharr URL. Proxy-route changes in Dispatcharr require compatibility review. The signed descriptor never contains provider credentials or the final source URL.
+
+## Provenance
+
+- ChatGPT `Sonarr Radarr VOD Connector`, 2026-08-12 live statistics and proxy-routing validation
+- Commits `0fbf846` through `fdc8099`, and `9565aa4` through `59c4d20`
+
+---
+
+# ADR-026: Persist Bridge State and Preserve SAB Job Identity Across Updates
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-12
+
+## Decision
+
+Store bridge job mappings under the persistent `/data/arr_stack_connector` state root and use namespaced `mustarrd-<id>` identifiers for new SAB-facing jobs. During the rename, move the previous `/data/dispatcharr_vod_newznab` directory to the new root while the old plugin is disabled.
+
+Preserve raw IDs for pre-v0.1.8 jobs and recover missing category, title, and relative path from Mustarrd output paths without inventing a new SAB ID. Recompute the category-based output path when `addfile` arrives rather than trusting an older cached descriptor.
+
+## Reason
+
+Atomic plugin updates replace plugin files and may restart services, while Sonarr/Radarr cache download IDs and synthetic NZBs. Moving state with the plugin or changing IDs mid-job breaks queue/history association and completed import.
+
+## Alternatives Considered
+
+- Keep state beside plugin code. Superseded because plugin updates can replace that directory.
+- Renumber every legacy job during migration. Rejected because Sonarr/Radarr may already track the original ID.
+- Store the final path inside the search descriptor. Superseded because the actual SAB category is supplied only during `addfile` and cached NZBs can outlive layout changes.
+
+## Consequences
+
+State writes must remain atomic. Queue/history translation must tolerate both legacy raw IDs and namespaced IDs. The old state root is migration input, not an ongoing runtime fallback.
+
+## Provenance
+
+- ChatGPT `Sonarr Radarr VOD Connector`, 2026-08-12 queue/history/import troubleshooting
+- Commits `43ee70d` through `3698f53`, and `59c4d20` through `46ec44f`
+
+---
+
+# ADR-027: Reuse Mustarrd Authentication and Map SAB Lifecycle Actions Completely
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-12
+
+## Decision
+
+Use one shared authenticated Mustarrd client per detached service configuration. Serialize session access, retain cookies and CSRF state, and authenticate again only after `401`/`403` or a connection-setting change.
+
+Translate SAB deletion into complete Mustarrd removal: cancel an active job, delete the resulting history row when necessary, and remove the local mapping. Translate SAB retry to Mustarrd's retry endpoint while preserving the SAB-facing ID.
+
+## Reason
+
+Sonarr and Radarr poll queue and history concurrently and frequently. Creating a new authenticated client per request hit Mustarrd's login rate limit. A single Mustarrd delete call can intentionally leave a cancelled history row, while SAB deletion means removal from the client view.
+
+## Alternatives Considered
+
+- Authenticate on every queue/history request. Superseded after live `429 Too Many Requests` failures.
+- Share `requests.Session` without synchronization. Rejected because cookie/session mutation is not guaranteed thread-safe.
+- Cancel active jobs but retain history after SAB deletion. Rejected because it does not match the expected SAB removal action.
+
+## Consequences
+
+Credential changes replace and close the shared client. Authentication failures may retry once after re-login. Mustarrd API lifecycle changes require coordinated review and queue/history/delete integration testing.
+
+## Provenance
+
+- ChatGPT `Sonarr Radarr VOD Connector`, 2026-08-12 live `429`, deletion, and polling evidence
+- Commits `bff2746`, `82b9dd7`, and `4bad78d`
 
 ---

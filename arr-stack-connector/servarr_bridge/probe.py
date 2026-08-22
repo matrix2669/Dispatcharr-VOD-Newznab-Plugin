@@ -1,3 +1,5 @@
+"""Media probing helpers for Arr Stack Connector."""
+
 import json
 import os
 import shutil

@@ -1,7 +1,7 @@
 {
-  "name": "Dispatcharr VOD Newznab",
-  "version": "0.1.16",
-  "description": "Expose raw Dispatcharr VOD providers to Sonarr/Radarr as a Newznab indexer and SABnzbd-compatible download client backed by Mustarrd.",
+  "name": "Arr Stack Connector",
+  "version": "0.2.0-beta.1",
+  "description": "Connect the Arr stack to raw Dispatcharr VOD providers through Newznab and a SABnzbd-compatible download client backed by Mustarrd.",
   "author": "matrix2669",
   "fields": [
     {"id":"listen_host","label":"Listen Address","type":"string","default":"0.0.0.0"},

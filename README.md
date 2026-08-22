@@ -1,6 +1,8 @@
-# Dispatcharr VOD Newznab Plugin
+# Dispatcharr Arr Stack Plugin
 
 A Dispatcharr plugin that exposes **raw Xtream VOD provider variants** to Sonarr and Radarr as a Newznab indexer and emulates the subset of SABnzbd used by Servarr. Selected releases are handed to Mustarrd for the actual download/remux lifecycle.
+
+This project was formerly named **Dispatcharr VOD Newznab Plugin**. The new registry slug and source archive directory are `arr-stack-connector`; Dispatcharr installs it under the normalized key and directory `arr_stack_connector`.
 
 ## Architecture
 
@@ -9,7 +11,7 @@ Sonarr / Radarr
   ├─ Newznab Interactive Search ─┐
   └─ SABnzbd Download Client ────┤
                                 ▼
-                  Dispatcharr VOD Newznab Plugin
+                    Dispatcharr Arr Stack Plugin
                     ├─ raw enabled Xtream accounts
                     ├─ TMDB matching + ffprobe
                     ├─ DV/HDR10+/HDR10/HDR/SDR naming
@@ -45,15 +47,28 @@ The proxy URL contains a unique VOD session ID in the path. This intentionally b
 
 ## Install
 
-Install from the Matrix2669 Dispatcharr plugin registry. Dispatcharr normalizes the installed plugin key to underscores, so the installed directory is normally:
+Install from the Matrix2669 Dispatcharr plugin registry. Dispatcharr normalizes the installed plugin key to underscores, so the installed directory is:
 
 ```text
-/data/plugins/dispatcharr_vod_newznab/
+/data/plugins/arr_stack_connector/
 ```
 
-Then reload plugins in Dispatcharr and enable **Dispatcharr VOD Newznab**. When enabled, the plugin starts one managed service process (default port `9192`) even when Dispatcharr has multiple uWSGI workers.
+Then reload plugins in Dispatcharr and enable **Arr Stack Connector**. When enabled, the plugin starts one managed service process (default port `9192`) even when Dispatcharr has multiple uWSGI workers.
 
 An API key is generated automatically on first enable. Use the plugin's **Service Status** action to display the service status and key.
+
+### One-time migration from Dispatcharr VOD Newznab
+
+The new slug is a separate Dispatcharr plugin identity, so an existing installation does not update in place automatically.
+
+1. Disable the old plugin so its service releases port `9192`.
+2. Copy or move `/data/plugins/dispatcharr_vod_newznab` to `/data/plugins/arr_stack_connector`.
+3. Copy or move `/data/dispatcharr_vod_newznab` to `/data/arr_stack_connector` to preserve bridge job state and logs.
+4. Install or update **Arr Stack Connector** from the renamed registry entry so the copied plugin files are replaced by the new version.
+5. Copy the old plugin settings into the new plugin record. Reuse the existing API key to avoid changing the Sonarr and Radarr indexer/download-client credentials.
+6. Enable **Arr Stack Connector**, verify Service Status and Sonarr/Radarr validation, then remove the old plugin entry and directories.
+
+Do not enable both identities at the same time because both use port `9192` by default.
 
 ## Dispatcharr plugin settings
 
@@ -96,18 +111,18 @@ The plugin always rebuilds this path when `mode=addfile` is received, so an olde
 
 ## Service logging and diagnostics
 
-The plugin uses Dispatcharr's `apps.plugins.loader` logger for plugin lifecycle messages, prefixed with `[Dispatcharr VOD Newznab]`.
+The plugin uses Dispatcharr's `apps.plugins.loader` logger for plugin lifecycle messages, prefixed with `[Arr Stack Connector]`.
 
 The detached Newznab/SAB service writes its own rotating log beside the installed plugin:
 
 ```text
-/data/plugins/dispatcharr_vod_newznab/servarr_service.log
+/data/arr_stack_connector/servarr_service.log
 ```
 
 The log rotates at 5 MB and keeps three backups. Very early child-process stdout/stderr is captured separately in:
 
 ```text
-/data/plugins/dispatcharr_vod_newznab/servarr_service_bootstrap.log
+/data/arr_stack_connector/servarr_service_bootstrap.log
 ```
 
 Routine `/health` probes are logged only at DEBUG.

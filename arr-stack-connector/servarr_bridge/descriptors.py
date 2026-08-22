@@ -1,3 +1,5 @@
+"""Signed synthetic descriptor handling for Arr Stack Connector."""
+
 import base64
 import hashlib
 import hmac
