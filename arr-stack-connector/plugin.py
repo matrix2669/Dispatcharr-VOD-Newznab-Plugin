@@ -106,7 +106,7 @@ def _dedupe_path_entries(entries):
 
 class Plugin:
     name = PLUGIN_NAME
-    version = "0.2.0-beta.1"
+    version = "0.2.0"
     description = "Arr stack bridge for raw Dispatcharr VOD providers backed by Mustarrd."
     author = "matrix2669"
 

@@ -6,7 +6,7 @@ This file contains release history only. Architectural decisions belong in `DECI
 
 The format follows Keep a Changelog principles where practical.
 
-## [0.2.0-beta.1] - Unreleased
+## [0.2.0] - 2026-08-22
 
 ### Added
 
